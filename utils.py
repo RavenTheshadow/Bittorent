@@ -69,6 +69,9 @@ def split_file_to_pieces(file_path,piece_length):
             mm = mmap.mmap(f.fileno(),length=0,access=mmap.ACCESS_READ,offset=0)
             pieces = [mm[p : p+piece_length] for p in range(0,file_size,piece_length)]
             mm.close()
+
+            for i in pieces:
+                print(len(i))
             return pieces
     else:
         print(f"No such a file: {file_path}")
