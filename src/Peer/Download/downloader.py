@@ -41,6 +41,9 @@ class Downloader:
         piece_path = self.download_dir / 'pieces' / f"{info_hash}.piece"
         self.file_structure.save_piece_data(piece_path, piece)
         self.having_pieces_list[index] = [] # None
+    
+    def is_having_all_pieces(self):
+            return all(self.bit_field)
 
 if __name__ == "__main__":
     tester = Downloader(r'C:\Users\MyClone\OneDrive\Desktop\SharingFolder\SubFolder.torrent', "127.119.128.1:6681")
