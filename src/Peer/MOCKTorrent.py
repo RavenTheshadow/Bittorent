@@ -57,7 +57,7 @@ class TorrentInfo:
     def get_number_of_pieces(self):
         return len(self.pieces) // 20
 
-if __name__=="__main":
+if __name__ == "__main__":
     # Example usage
     torrent_info = TorrentInfo(r'C:\Users\MyClone\OneDrive\Desktop\SharingFolder\SubFolder.torrent')
     print(f"Info Hash: {torrent_info.info_hash}")

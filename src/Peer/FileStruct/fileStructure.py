@@ -13,6 +13,10 @@ class FileStructure:
         with open(bitfield_path, 'wb') as f:
             f.write(bytes(self.bitfield))
 
+    def save_piece_data(self, piece_path, piece):
+        with open(piece_path, 'wb') as f:
+            f.write(piece)
+
     def update_mapping_file(self):
         mapping_file = {self.info_hash: str(self.download_dir / self.info_hash / 'pieces')}
 
@@ -52,8 +56,5 @@ class FileStructure:
         return mp[self.info_hash]
 
 if __name__ == "__main__":
-    # fs = FileStructure(r"C:\Users\MyClone\OneDrive\Desktop\HK 241\Network\Assignment1\MainCode\Bittorent\DownloadFolder",
-    #                     mapping_file_path=r"C:\Users\MyClone\OneDrive\Desktop\HK 241\Network\Assignment1\MainCode\Bittorent\DownloadFolder\mapping_file.json")
-    # print(fs.get_info_hash_folder())
     fs = FileStructure()
     print(fs.get_info_hash_folder())

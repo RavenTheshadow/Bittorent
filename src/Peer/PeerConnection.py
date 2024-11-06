@@ -1,8 +1,14 @@
-import socket, struct, random
+import socket
+import struct
+import random
+import hashlib
+import logging
 from threading import Lock, Barrier, Event
 from concurrent.futures import ThreadPoolExecutor
 from Message.sendMessage import SendMessageP2P
 from Download.downloader import Downloader
+
+logging.basicConfig(level=logging.INFO)
 
 class P2PConnection:
     def __init__(self, torrent_file_path, our_peer_id="Hello", peerList=[]):
@@ -14,105 +20,120 @@ class P2PConnection:
         self.peer_event = {peer: Event() for peer in peerList}
         self.peer_block_requests = {peer: [] for peer in peerList}
         self.piece_data = {}
-    def connect_to_peer(self, peer):
-        try:
-            peer_ip, peer_port = peer
+        self.contributor = {peer: 0 for peer in peerList}
+        self.isEnoughPiece = False
 
+    def connect_to_peer(self, peer):
+        peer_ip, peer_port = peer
+        try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.settimeout(10)  # Set timeout to avoid infinite waiting
+                s.settimeout(60)
                 s.connect((peer_ip, peer_port))
-                
-                # Send the handshake message
+
                 send_message = SendMessageP2P()
                 send_message.send_handshake_message(s, self.downloader.info_hash, self.our_peer_id)
 
-                # Receive the handshake message
                 handshake_response = s.recv(68)
-                if handshake_response[28:48] == self.downloader.info_hash.encode('utf-8'):
-                    print(f"Handshake successful with {peer_ip}:{peer_port}")
+                if handshake_response[28:48] != self.downloader.info_hash.encode('utf-8'):
+                    logging.error(f"Handshake failed with {peer_ip}:{peer_port}")
+                    return
 
-                    # Receive bitfield message
-                    bitfield_length_bytes = s.recv(4)
-                    if len(bitfield_length_bytes) == 4:
-                        bitfield_length = struct.unpack('>I', bitfield_length_bytes)[0]
+                logging.info(f"Handshake successful with {peer_ip}:{peer_port}")
+                self._receive_bitfield(s, peer_ip, peer_port)
+                self.barrier.wait()
 
-                        bitfield_message_id_bytes = s.recv(1)
-                        if len(bitfield_message_id_bytes) == 1:
-                            bitfield_message_id = struct.unpack('B', bitfield_message_id_bytes)[0]
+                while not self.isEnoughPiece:
+                    self.peer_event[peer].wait()
+                    self._download_block(s, peer)
+                
+        except (socket.timeout, socket.error) as e:
+            logging.error(f"Failed to connect to {peer_ip}:{peer_port} - {e}")
+        finally:
+            if peer in self.peerList:
+                self.peerList.remove(peer)
 
-                            if bitfield_message_id == 5:  # Message ID for "bitfield" is 5
-                                bitfield = s.recv(bitfield_length - 1)
+    def _receive_bitfield(self, s, peer_ip, peer_port):
+        try:
+            bitfield_length = struct.unpack('>I', s.recv(4))[0]
+            bitfield_message_id = struct.unpack('B', s.recv(1))[0]
+            if bitfield_message_id == 5:
+                bitfield = s.recv(bitfield_length - 1)
+                with self.lock:
+                    for i, has_piece in enumerate(bitfield):
+                        if has_piece and i < self.downloader.pieces_length:
+                            peer_info = (peer_ip, peer_port)
+                            if peer_info not in self.downloader.having_pieces_list[i]:
+                                self.downloader.having_pieces_list[i].append(peer_info)
+                logging.info(f"Received bitfield from {peer_ip}:{peer_port}")
+        except (struct.error, socket.error) as e:
+            logging.error(f"Error processing bitfield from {peer_ip}:{peer_port} - {e}")
 
-                                # Update shared resources
-                                with self.lock:
-                                    for i, has_piece in enumerate(bitfield):
-                                        if has_piece and i < self.downloader.pieces_length:
-                                            peer_info = (peer_ip, peer_port)
-                                            if peer_info not in self.downloader.having_pieces_list[i]:
-                                                self.downloader.having_pieces_list[i].append(peer_info)
+    def _download_block(self, s, peer):
+        send_message = SendMessageP2P()
 
-                            print(f"Received bitfield from {peer_ip}:{peer_port}")
+        while True:
+            self.peer_event[peer].wait()
+            if not self.peer_block_requests[peer]:
+                continue
 
-                    # Wait for all peers to get the bitfield
-                    self.barrier.wait()
+            index, start, end = self.peer_block_requests[peer].pop(0)
+            
+            send_message.send_interested_message(s)
+            send_message.wait_for_unchoke_message(s)
+            send_message.send_request_message(index, start, end - start, s)
 
-                    piece_index     = None
-                    piece_size      = None
-                    piece_data      = None
-                    
-                    
-                    while True:
-                        # Wait for the first rarest piece to be ready
-                        self.peer_event[peer].wait()
+            block_data = s.recv(end - start)
+            with self.lock:
+                if index not in self.piece_data:
+                    piece_size = self.downloader.torrent_info.get_piece_sizes()[index]
+                    self.piece_data[index] = bytearray(piece_size)
+                self.piece_data[index][start:end] = block_data
 
-                        if self.peer_block_requests[peer]:
-                            index, start, length = self.peer_block_requests[peer].pop(0)
-
-                            if piece_index is None:
-                                piece_index = index
-                                piece_size  = self.downloader.torrent_info.get_piece_sizes()[piece_index]
-                                piece_data  = bytearray(piece_size)
-                                self.piece_data[piece_index] = piece_data
-
-                            send_message.send_interested_message(s)
-                            send_message.wait_for_unchoke_message(s)
-                            send_message.send_request_message(index, start, length, s)
-                            
-                            # Receive the block
-                            block_data = s.recv(length)
-                            piece_data[start:(start + length)] = block_data
-
-                            if all(piece_data):
-                                print(f"Piece {piece_index} downloaded successfully")
-                                self.peer_event[peer].clear()
-                                piece_index    = None
-                                piece_size     = None
-                                piece_data     = None
-
-                        send_message.send_keep_alive_message(s)
+            if len(self.piece_data[index]) == self.downloader.torrent_info.get_piece_sizes()[index]:
+                piece_hash = hashlib.sha1(self.piece_data[index]).hexdigest()
+                expected_hash = self.downloader.torrent_info.get_piece_info_hash(index)
+                if piece_hash == expected_hash:
+                    self.contributor[peer] += (end - start)
                 else:
-                    print(f"Handshake failed with {peer_ip}:{peer_port}")
-        except socket.error as e:
-            print(f"Failed to connect to {peer_ip}:{peer_port} - {e}")
-            self.peerList.remove(peer)
+                    logging.error(f"Piece {index} hash mismatch. Expected {expected_hash}, got {piece_hash}")
+
+            self.peer_event[peer].clear()
 
     def create_connection(self):
         with ThreadPoolExecutor(max_workers=len(self.peerList)) as executor:
             futures = [executor.submit(self.connect_to_peer, peer) for peer in self.peerList]
 
             self.barrier.wait()
-            rarest_piece = self.downloader.get_rarest_pieces()
-
-            if rarest_piece is not None:
-                request_blocks = self.downloader.download_piece(rarest_piece)
-                # Select random 4 peer in having pieces list
-                peers_selected = random.sample(self.downloader.having_pieces_list[rarest_piece], min(4, len(self.downloader.having_pieces_list[rarest_piece])))
-
-                for i, block in enumerate(request_blocks):
-                    peer = peers_selected[i % len(peers_selected)]
-                    self.peer_block_requests[peer].append(block)
-                    self.peer_event[peer].set()
-                
+            self._request_rarest_pieces()
 
             for future in futures:
                 future.result()
+
+    def _request_rarest_pieces(self):
+        while True:
+            rarest_piece = self.downloader.get_rarest_pieces()
+            if rarest_piece is None:
+                self.isEnoughPiece = True
+                return
+            
+            torrent_info_hash = self.downloader.torrent_info.get_piece_info_hash(rarest_piece)
+            custom = None
+            while True:
+                request_blocks = self.downloader.download_piece(rarest_piece)
+                selected_peers = random.sample(self.downloader.having_pieces_list[rarest_piece], min(4, len(self.downloader.having_pieces_list[rarest_piece])))
+
+                for i, block in enumerate(request_blocks):
+                    peer = selected_peers[i % len(selected_peers)]
+                    self.peer_block_requests[peer].append(block)
+                    self.peer_event[peer].set()
+                
+                custom = hashlib.sha1(self.piece_data[rarest_piece]).hexdigest()
+                if torrent_info_hash == custom:
+                    self.downloader.update_pieces(rarest_piece, self.piece_data[rarest_piece], torrent_info_hash)
+                    for i, block in enumerate(request_blocks):
+                        peer = selected_peers[i % len(selected_peers)]
+                        index, start, end = block
+                        self.contributor[peer] += end - start
+
+                    del self.piece_data[rarest_piece]
+                    break
