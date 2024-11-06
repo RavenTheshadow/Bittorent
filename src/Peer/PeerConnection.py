@@ -3,6 +3,7 @@ import struct
 import random
 import hashlib
 import logging
+from threading import Thread
 from threading import Lock, Barrier, Event
 from concurrent.futures import ThreadPoolExecutor
 from Message.sendMessage import SendMessageP2P
