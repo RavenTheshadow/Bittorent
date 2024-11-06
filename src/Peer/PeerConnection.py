@@ -8,6 +8,7 @@ from threading import Lock, Barrier, Event, Thread
 from concurrent.futures import ThreadPoolExecutor
 from Message.sendMessage import SendMessageP2P
 from Download.downloader import Downloader
+from Upload.upload import Upload
 
 logging.basicConfig(level=logging.INFO)
 
@@ -27,6 +28,10 @@ class P2PConnection:
         self.barrier = Barrier(len(peerList) + 1)
         self.peer_event = {peer: Event() for peer in peerList}
         self.peer_block_requests = {peer: [] for peer in peerList}
+       
+        self.piece_data = {}
+        self.isEnoughPiece = False
+        self.uploader = Upload(self.downloader.torrent_info, 'path/to/piece_folder')
 
     def connect_to_peer(self, peer):
         peer_ip, peer_port = peer
@@ -186,7 +191,10 @@ class P2PConnection:
             logging.error(f"Error: {e}")
             pass
 
-    def create_connection(self):
+    def create_connection(self,listen_port):
+        # Tạo một luồng mới để lắng nghe các kết nối từ peer khác
+        Thread(target=self.listen_for_peers, args=(listen_port,)).start()
+
         with ThreadPoolExecutor(max_workers=len(self.peerList)) as executor:
             futures = [executor.submit(self.connect_to_peer, peer) for peer in self.peerList]
 
@@ -229,3 +237,47 @@ class P2PConnection:
 
                     del self.piece_data[rarest_piece]
                     break
+
+
+    
+
+
+
+
+
+
+
+    # Phần này lâm viết 
+    def listen_for_peers(self, listen_port):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
+                server_socket.bind(('', listen_port))
+                server_socket.listen(5)
+                logging.info(f"Listening for incoming connections on port {listen_port}")
+
+                while True:
+                    conn, addr = server_socket.accept()
+                    logging.info(f"Accepted connection from {addr}")
+
+                  # Tạo một luồng mới để xử lý kết nối peer mới
+                    Thread(target=self.handle_incoming_peer, args=(conn, addr)).start()
+        except socket.error as e:
+            logging.error(f"Error while listening for peers: {e}")
+
+    def handle_incoming_peer(self, conn, addr):
+        try:
+            # Nhận handshake từ peer gửi đến
+            handshake = conn.recv(68)
+            received_info_hash = handshake[28:48]
+
+            if self.uploader.check_info_hash(received_info_hash.decode('utf-8')):
+             # Gửi lại handshake phản hồi nếu info_hash đúng
+                self.uploader.send_handshake_response(conn, self.our_peer_id)
+                logging.info(f"Sent handshake response to {addr}")
+            else:
+                logging.error(f"Invalid info_hash received from {addr}")
+                conn.close()
+        except (socket.error, struct.error) as e:
+            logging.error(f"Error handling peer {addr}: {e}")
+        finally:
+            conn.close()
