@@ -221,7 +221,7 @@ class P2PConnection:
                 
                 custom = hashlib.sha1(self.piece_data[rarest_piece]).hexdigest()
                 if torrent_info_hash == custom:
-                    self.downloader.update_pieces(rarest_piece, self.piece_data[rarest_piece], torrent_info_hash)
+                    self.downloader.update_pieces(rarest_piece, self.piece_data[rarest_piece], rarest_piece)
                     # for i, block in enumerate(request_blocks):
                     #     peer = selected_peers[i % len(selected_peers)]
                     #     index, start, end = block
