@@ -30,7 +30,7 @@ class P2PConnection:
         self.peer_block_requests = {peer: [] for peer in peerList}
     
         self.isEnoughPiece = False
-        self.uploader = Upload(torrent_file_path, 'path/to/piece_folder')
+        self.uploader = Upload(torrent_file_path,r'C:\Users\User\Desktop\Năm 3\HK1\Computer Network\Asignment1\Bittorent\DownloadFolder\mapping_file.json')
 
     def connect_to_peer(self, peer):
         peer_ip, peer_port = peer
@@ -245,6 +245,8 @@ class P2PConnection:
 
 
     # Phần này lâm viết 
+
+
     def listen_for_peers(self, listen_port):
         """Continuously listens for incoming peer connections."""
         try:
@@ -268,9 +270,12 @@ class P2PConnection:
             handshake = conn.recv(68)
             received_info_hash = handshake[28:68]
 
-            if self.uploader.check_info_hash(received_info_hash):
+            if self.uploader.check_info_hash(received_info_hash.decode('utf-8')):
                 self.uploader.send_handshake_response(conn, self.our_peer_id)
                 logging.info(f"Sent handshake response to {addr}")
+
+                #Gửi bitfield
+                self.uploader.send_bitfield(conn)
             else:
                 logging.error(f"Invalid info_hash received from {addr}")
                 conn.close()
@@ -296,4 +301,4 @@ if __name__ == "__main__":
     
     peer = P2PConnection(r'C:\Users\User\Desktop\SubFolder.torrent',
                           our_Peer_ID, peerList)
-    peer.create_connection(6666)
+    peer.create_connection(6868)
