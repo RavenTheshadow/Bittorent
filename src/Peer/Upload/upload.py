@@ -46,7 +46,8 @@ class Upload:
         """Sends the bitfield message to a connected peer."""
         try:
             # Read bitfield data from disk
-            bitfield_path = f"{self.piece_folder}/bitfield"
+            parent_folder = os.path.dirname(self.piece_folder)
+            bitfield_path = os.path.join(parent_folder, 'bitfield')
             with open(bitfield_path, 'rb') as f:
                 bitfield = f.read()
 

@@ -32,7 +32,7 @@ class P2PConnection:
         self.peer_block_requests = {peer: [] for peer in peerList}
     
         self.isEnoughPiece = False
-        self.uploader = Upload(torrent_file_path,r'C:\Users\User\Desktop\Năm 3\HK1\Computer Network\Asignment1\Bittorent\DownloadFolder\mapping_file.json')
+        self.uploader = Upload(torrent_file_path,r'DownloadFolder/mapping_file.json')
 
     def connect_to_peer(self, peer):
         peer_ip, peer_port = peer
@@ -54,8 +54,19 @@ class P2PConnection:
                 #     return
 
                 logging.info(f"Handshake successful with {peer_ip}:{peer_port}")
-                self._receive_bitfield(s, peer_ip, peer_port)
-                
+
+                bitfield_length = struct.unpack('>I', s.recv(4))[0]
+                bitfield_message_id = struct.unpack('B', s.recv(1))[0]
+                if bitfield_message_id == 5:
+                    bitfield = s.recv(bitfield_length - 1)
+                    with self.lock:
+                        for i, has_piece in enumerate(bitfield):
+                            if has_piece and i < self.downloader.pieces_length:
+                                if peer not in self.downloader.having_pieces_list[i]:
+                                    self.downloader.having_pieces_list[i].append(peer)
+
+                logging.info(f"Received bitfield from {peer[0]}:{peer[1]}")
+                                
                 message_queue = queue.Queue()
     
                 listen_thread = Thread(target=self._listen_thread, args=(s, peer, message_queue))
@@ -148,21 +159,6 @@ class P2PConnection:
                 self.contributor[peer] += len(block_data)
             else:
                 logging.error(f"Piece {index} hash mismatch. Expected {expected_hash}, got {piece_hash}")
-
-    def _receive_bitfield(self, s, peer):
-        try:
-            bitfield_length = struct.unpack('>I', s.recv(4))[0]
-            bitfield_message_id = struct.unpack('B', s.recv(1))[0]
-            if bitfield_message_id == 5:
-                bitfield = s.recv(bitfield_length - 1)
-                with self.lock:
-                    for i, has_piece in enumerate(bitfield):
-                        if has_piece and i < self.downloader.pieces_length:
-                            if peer not in self.downloader.having_pieces_list[i]:
-                                self.downloader.having_pieces_list[i].append(peer)
-                logging.info(f"Received bitfield from {peer[0]}:{peer[1]}")
-        except (struct.error, socket.error) as e:
-            logging.error(f"Error processing bitfield from {peer[0]}:{peer[1]} - {e}")
 
     def _send_block_request(self, s, peer):
         try:
@@ -272,6 +268,10 @@ class P2PConnection:
 
                 #Gửi bitfield
                 self.uploader.send_bitfield(conn)
+
+                #
+                while True:
+                    pass
             else:
                 logging.error(f"Invalid info_hash received from {addr}")
                 conn.close()
@@ -293,11 +293,8 @@ if __name__ == "__main__":
     peer = P2PConnection(r'C:\Users\MyClone\OneDrive\Desktop\SharingFolder\SubFolder.torrent',
                           our_Peer_ID, peerList)
 
-    # peer.create_connection()
-
     p = Thread(target=peer.listen_for_peers, args=(6868, ))
     p.start()
 
     time.sleep(1)
     peer.create_connection(6000)
-
