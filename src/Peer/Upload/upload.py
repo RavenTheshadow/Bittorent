@@ -22,7 +22,12 @@ class Upload:
 
     def check_info_hash(self, received_info_hash):
         check = self.torrent_info.info_hash
+        if received_info_hash == check:
+            logging.info("Info hash matches.")
+        else:
+            logging.error(f"Info hash mismatch: expected {check}, received {received_info_hash}")
         return received_info_hash == check
+
 
     def send_handshake_response(self, socket, peer_id):
         pstr = "BitTorrent protocol"

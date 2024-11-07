@@ -191,7 +191,9 @@ class P2PConnection:
             pass
 
     def create_connection(self,listen_port):
-       
+       # Start a dedicated listener thread
+        listener_thread = Thread(target=self.listen_for_peers, args=(listen_port,))
+        listener_thread.start()
 
         with ThreadPoolExecutor(max_workers=len(self.peerList)) as executor:
             futures = [executor.submit(self.connect_to_peer, peer) for peer in self.peerList]
@@ -244,6 +246,7 @@ class P2PConnection:
 
     # Phần này lâm viết 
     def listen_for_peers(self, listen_port):
+        """Continuously listens for incoming peer connections."""
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
                 server_socket.bind(('', listen_port))
@@ -254,19 +257,18 @@ class P2PConnection:
                     conn, addr = server_socket.accept()
                     logging.info(f"Accepted connection from {addr}")
 
-                  # Tạo một luồng mới để xử lý kết nối peer mới
+                    # Start a new thread to handle each incoming peer
                     Thread(target=self.handle_incoming_peer, args=(conn, addr)).start()
         except socket.error as e:
             logging.error(f"Error while listening for peers: {e}")
 
     def handle_incoming_peer(self, conn, addr):
+        """Handles an incoming peer connection."""
         try:
-            # Nhận handshake từ peer gửi đến
             handshake = conn.recv(68)
-            received_info_hash = handshake[28:48]
+            received_info_hash = handshake[28:68]
 
             if self.uploader.check_info_hash(received_info_hash):
-             # Gửi lại handshake phản hồi nếu info_hash đúng
                 self.uploader.send_handshake_response(conn, self.our_peer_id)
                 logging.info(f"Sent handshake response to {addr}")
             else:
@@ -284,15 +286,14 @@ def get_my_IP():
     s.close()
     return my_IP
 
-import hashlib
 
 if __name__ == "__main__":
     my_IP = get_my_IP()
     print(my_IP)
     our_Peer_ID = hashlib.sha1(my_IP.encode('utf-8')).hexdigest()
 
-    peerList = [("10.229.102.243", 6881)]
+    peerList = [("10.229.102.243", 6868)]
     
     peer = P2PConnection(r'C:\Users\User\Desktop\SubFolder.torrent',
                           our_Peer_ID, peerList)
-    peer.listen_for_peers(6666)
+    peer.create_connection(6666)
