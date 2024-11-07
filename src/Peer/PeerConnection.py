@@ -190,9 +190,7 @@ class P2PConnection:
             logging.error(f"Error: {e}")
             pass
 
-    def create_connection(self,listen_port):
-        # Tạo một luồng mới để lắng nghe các kết nối từ peer khác
-        Thread(target=self.listen_for_peers, args=(listen_port,)).start()
+    def create_connection(self):
 
         with ThreadPoolExecutor(max_workers=len(self.peerList)) as executor:
             futures = [executor.submit(self.connect_to_peer, peer) for peer in self.peerList]
@@ -277,22 +275,29 @@ class P2PConnection:
             logging.error(f"Error handling peer {addr}: {e}")
         finally:
             conn.close()
+    
+    def create_listener(self, listen_port):
+        Thread(target=self.listen_for_peers, args=(listen_port,)).start()
 
-def get_my_IP():
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.connect(("8.8.8.8", 80))
-    my_IP = s.getsockname()[0]
-    s.close()
-    return my_IP
+# def get_my_IP():
+#     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+#     s.connect(("8.8.8.8", 80))
+#     my_IP = s.getsockname()[0]
+#     s.close()
+#     return my_IP
 
 import hashlib
 
 if __name__ == "__main__":
-    my_IP = get_my_IP()
-    print(my_IP)
-    our_Peer_ID = hashlib.sha1(my_IP.encode('utf-8')).hexdigest()
+    # my_IP = get_my_IP()
+    # print(my_IP)
 
-    peerList = [("192.168.1.1", 6881)]
+    our_Peer_ID = "10.229.102.243:6868"
+
+    peerList = [("10.229.115.137", 6666)]
     peer = P2PConnection(r'C:\Users\MyClone\OneDrive\Desktop\SharingFolder\SubFolder.torrent',
                           our_Peer_ID, peerList)
-    peer.create_connection(6666)
+    peer.create_connection()
+    
+    # My IP:  10.229.102.243
+    # Lam IP: 10.229.115.137 port: 6666
