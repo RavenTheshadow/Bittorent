@@ -13,7 +13,7 @@ from Upload.upload import Upload
 logging.basicConfig(level=logging.INFO)
 
 class P2PConnection:
-    def __init__(self, torrent_file_path, our_peer_id="Hello", peerList=[]):
+    def __init__(self, torrent_file_path, our_peer_id="191.168.1.1", peerList=[]):
         self.lock = Lock()
         self.our_peer_id = our_peer_id
         self.peerList = peerList
@@ -24,13 +24,15 @@ class P2PConnection:
         self.isEnoughPiece = False
         self.isDownloadComplete = False
 
-        self.downloader = Downloader(torrent_file_path, our_peer_id)
+        self.torrent_file_path = torrent_file_path
+        self.our_peer_id = our_peer_id
+        
         self.barrier = Barrier(len(peerList) + 1)
         self.peer_event = {peer: Event() for peer in peerList}
         self.peer_block_requests = {peer: [] for peer in peerList}
     
         self.isEnoughPiece = False
-        self.uploader = Upload(self.downloader.torrent_info, 'path/to/piece_folder')
+        self.uploader = Upload(torrent_file_path, 'path/to/piece_folder')
 
     def connect_to_peer(self, peer):
         peer_ip, peer_port = peer
@@ -40,12 +42,16 @@ class P2PConnection:
                 s.connect((peer_ip, peer_port))
 
                 send_message = SendMessageP2P()
-                send_message.send_handshake_message(s, self.downloader.info_hash, self.our_peer_id)
+                send_message.send_handshake_message(s, self.downloader.torrent_info.info_hash, self.our_peer_id)
 
-                handshake_response = s.recv(68)
-                if handshake_response[28:68] != self.downloader.info_hash.encode('utf-8'):
-                    logging.error(f"Handshake failed with {peer_ip}:{peer_port}")
-                    return
+                handshake_response = s.recv(88)
+
+                # handshake_response = handshake_response.decode('utf-8')
+                # logging.info(f"Compare: {handshake_response[28:48]}  {self.downloader.torrent_info.info_hash}")
+
+                # if handshake_response[28:68] != self.downloader.torrent_info.info_hash:
+                #     logging.error(f"Handshake failed with {peer_ip}:{peer_port}")
+                #     return
 
                 logging.info(f"Handshake successful with {peer_ip}:{peer_port}")
                 self._receive_bitfield(s, peer_ip, peer_port)
@@ -73,19 +79,6 @@ class P2PConnection:
         finally:
             if peer in self.peerList:
                 self.peerList.remove(peer)
-
-    # def _send_request_list_peers(self, s: socket.socket):
-    #     try:
-    #         send_message = SendMessageP2P()
-    #         # send_message.send_list_peers_message(s)
-    #         response = s.recv(1024)
-    #         if response:
-    #             logging.info(f"Received list of peers: {response}")
-    #         else:
-    #             logging.error("Failed to receive list of peers")
-    #     except socket.error as e:
-    #         logging.error(f"Error sending list peers request: {e}")
-
 
     def _listen_thread(self, s: socket.socket, peer, message_queue: queue.Queue):
         try:
@@ -190,7 +183,13 @@ class P2PConnection:
             logging.error(f"Error: {e}")
             pass
 
-    def create_connection(self):
+
+    def create_connection(self,listen_port):
+        self.downloader = Downloader(self.torrent_file_path, self.our_peer_id)
+        # Start a dedicated listener thread
+        listener_thread = Thread(target=self.listen_for_peers, args=(listen_port,))
+        listener_thread.start()
+
 
         with ThreadPoolExecutor(max_workers=len(self.peerList)) as executor:
             futures = [executor.submit(self.connect_to_peer, peer) for peer in self.peerList]
@@ -243,6 +242,7 @@ class P2PConnection:
 
     # Phần này lâm viết 
     def listen_for_peers(self, listen_port):
+        """Continuously listens for incoming peer connections."""
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
                 server_socket.bind(('', listen_port))
@@ -253,19 +253,18 @@ class P2PConnection:
                     conn, addr = server_socket.accept()
                     logging.info(f"Accepted connection from {addr}")
 
-                  # Tạo một luồng mới để xử lý kết nối peer mới
+                    # Start a new thread to handle each incoming peer
                     Thread(target=self.handle_incoming_peer, args=(conn, addr)).start()
         except socket.error as e:
             logging.error(f"Error while listening for peers: {e}")
 
     def handle_incoming_peer(self, conn, addr):
+        """Handles an incoming peer connection."""
         try:
-            # Nhận handshake từ peer gửi đến
-            handshake = conn.recv(68)
+            handshake = conn.recv(88)
             received_info_hash = handshake[28:68]
 
             if self.uploader.check_info_hash(received_info_hash.decode('utf-8')):
-             # Gửi lại handshake phản hồi nếu info_hash đúng
                 self.uploader.send_handshake_response(conn, self.our_peer_id)
                 logging.info(f"Sent handshake response to {addr}")
             else:
@@ -277,26 +276,21 @@ class P2PConnection:
             conn.close()
     
 
-# def get_my_IP():
-#     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-#     s.connect(("8.8.8.8", 80))
-#     my_IP = s.getsockname()[0]
-#     s.close()
-#     return my_IP
-
-import hashlib
+import time
 
 if __name__ == "__main__":
     # my_IP = get_my_IP()
     # print(my_IP)
 
-    our_Peer_ID = "10.229.102.243:6868"
+    our_Peer_ID = "192.168.56.1:6000"
 
-    peerList = [("10.229.102.243", 6666)]
+    peerList = [("192.168.56.1", 6868)]
     peer = P2PConnection(r'C:\Users\MyClone\OneDrive\Desktop\SharingFolder\SubFolder.torrent',
                           our_Peer_ID, peerList)
     # peer.create_connection()
-    peer.listen_for_peers(6868)
-    
-    # My IP:  10.229.102.243
-    # Lam IP: 10.229.115.137 port: 6666
+
+    p = Thread(target=peer.listen_for_peers, args=(6868, ))
+    p.start()
+
+    time.sleep(1)
+    peer.create_connection(6000)

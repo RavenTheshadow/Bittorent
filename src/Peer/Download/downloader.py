@@ -8,11 +8,10 @@ from FileStruct.fileStructure import FileStructure
 class Downloader:
     def __init__(self, torrent_file_path, our_peer_id):
         self.torrent_info = TorrentInfo(torrent_file_path)
-        self.info_hash = self.torrent_info.info_hash
         self.pieces_length = self.torrent_info.get_number_of_pieces()
         self.having_pieces_list = defaultdict(list)
         self.our_peer_id = our_peer_id
-        self.file_structure = FileStructure("DownloadFolder", self.info_hash, self.pieces_length, "DownloadFolder/mapping_file.json")
+        self.file_structure = FileStructure("DownloadFolder", self.torrent_info.info_hash, self.pieces_length, "DownloadFolder/mapping_file.json")
         self.download_dir = self.file_structure.get_info_hash_folder()
         self.bit_field = self.file_structure.get_bitfield_info(self.download_dir)
         self.piece_data = None

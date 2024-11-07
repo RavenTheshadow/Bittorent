@@ -4,20 +4,7 @@ import hashlib
 
 class TorrentInfo:
     def __init__(self, torrent_file_path):
-        self.torrent_file_path = Path(torrent_file_path).resolve()
-        self.info_hash = None
-        self.piece_length = None
-        self.pieces = None
-        self.name = None
-        self.files = None
-        self.announce = None
-
-        self._read_torrent_file()
-
-    def _read_torrent_file(self):
-        if not self.torrent_file_path.exists():
-            raise FileNotFoundError(f"Torrent file not found: {self.torrent_file_path}")
-
+        self.torrent_file_path = torrent_file_path
         with open(self.torrent_file_path, 'rb') as f:
             torrent_data = bencodepy.decode(f.read())
 
@@ -31,7 +18,7 @@ class TorrentInfo:
                 "path": [p.decode('utf-8') for p in file[b'path']]
             }
             for file in info[b'files']
-        ] if b'files' in info else []
+        ] if b'files' in info else [{"length": info[b'length'], "path": [self.name]}]
 
         self.announce = torrent_data[b'announce'].decode('utf-8')
 
