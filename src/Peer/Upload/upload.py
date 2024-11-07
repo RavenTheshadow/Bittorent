@@ -5,20 +5,61 @@ import logging
 import threading
 import time
 import random
+import struct
+import logging
+import socket
 import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from MOCKTorrent import TorrentInfo
-
+import json
 
 class Upload:
-    def __init__(self, torrent_file_path, piece_folder):
+    def __init__(self, torrent_file_path, mapping_file_path):
         self.torrent_info = TorrentInfo(torrent_file_path)
-        self.piece_folder = piece_folder
+        self.piece_folder = self._get_piece_folder(mapping_file_path)
         self.contribution_rank = {}  # Bảng xếp hạng đóng góp
         self.unchoke_list = []       # Danh sách peer được unchoke
         self.lock = threading.Lock()
+
+    def _get_piece_folder(self, mapping_file_path):
+        """Retrieve the piece folder path based on the info_hash from the mapping file."""
+        try:
+            with open(mapping_file_path, 'r') as f:
+                mapping = json.load(f)
+            
+            # Look up folder path using info_hash
+            info_hash = self.torrent_info.info_hash
+            piece_folder = mapping.get(info_hash)
+
+            if piece_folder:
+                return piece_folder
+            else:
+                logging.error(f"No piece folder found for info_hash: {info_hash}")
+                return None
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            logging.error(f"Error reading mapping file: {e}")
+            return None
+
+    def send_bitfield(self, conn):
+        """Sends the bitfield message to a connected peer."""
+        try:
+            # Read bitfield data from disk
+            bitfield_path = f"{self.piece_folder}/bitfield"
+            with open(bitfield_path, 'rb') as f:
+                bitfield = f.read()
+
+            # Prepare bitfield message
+            bitfield_message = struct.pack('>IB', len(bitfield) + 1, 5) + bitfield
+
+            # Send bitfield message
+            conn.sendall(bitfield_message)
+            logging.info(f"Sent bitfield to peer {conn.getpeername()}")
+        except (FileNotFoundError, IOError) as e:
+            logging.error(f"Error reading bitfield from disk: {e}")
+        except socket.error as e:
+            logging.error(f"Error sending bitfield to peer {conn.getpeername()}: {e}")
 
     def check_info_hash(self, received_info_hash):
         check = self.torrent_info.info_hash
