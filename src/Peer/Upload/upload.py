@@ -5,17 +5,24 @@ import logging
 import threading
 import time
 import random
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+
+from MOCKTorrent import TorrentInfo
+
 
 class Upload:
-    def __init__(self, torrent_info, piece_folder):
-        self.torrent_info = torrent_info
+    def __init__(self, torrent_file_path, piece_folder):
+        self.torrent_info = TorrentInfo(torrent_file_path)
         self.piece_folder = piece_folder
         self.contribution_rank = {}  # Bảng xếp hạng đóng góp
         self.unchoke_list = []       # Danh sách peer được unchoke
         self.lock = threading.Lock()
 
     def check_info_hash(self, received_info_hash):
-        return received_info_hash == self.torrent_info.info_hash
+        check = self.torrent_info.info_hash
+        return received_info_hash == check
 
     def send_handshake_response(self, socket, peer_id):
         pstr = "BitTorrent protocol"

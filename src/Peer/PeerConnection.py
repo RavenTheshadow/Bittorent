@@ -30,7 +30,7 @@ class P2PConnection:
         self.peer_block_requests = {peer: [] for peer in peerList}
     
         self.isEnoughPiece = False
-        self.uploader = Upload(self.downloader.torrent_info, 'path/to/piece_folder')
+        self.uploader = Upload(torrent_file_path, 'path/to/piece_folder')
 
     def connect_to_peer(self, peer):
         peer_ip, peer_port = peer
@@ -191,8 +191,7 @@ class P2PConnection:
             pass
 
     def create_connection(self,listen_port):
-        # Tạo một luồng mới để lắng nghe các kết nối từ peer khác
-        Thread(target=self.listen_for_peers, args=(listen_port,)).start()
+       
 
         with ThreadPoolExecutor(max_workers=len(self.peerList)) as executor:
             futures = [executor.submit(self.connect_to_peer, peer) for peer in self.peerList]
@@ -266,7 +265,7 @@ class P2PConnection:
             handshake = conn.recv(68)
             received_info_hash = handshake[28:48]
 
-            if self.uploader.check_info_hash(received_info_hash.decode('utf-8')):
+            if self.uploader.check_info_hash(received_info_hash):
              # Gửi lại handshake phản hồi nếu info_hash đúng
                 self.uploader.send_handshake_response(conn, self.our_peer_id)
                 logging.info(f"Sent handshake response to {addr}")
@@ -292,7 +291,8 @@ if __name__ == "__main__":
     print(my_IP)
     our_Peer_ID = hashlib.sha1(my_IP.encode('utf-8')).hexdigest()
 
-    peerList = [("192.168.1.1", 6881)]
-    peer = P2PConnection(r'C:\Users\MyClone\OneDrive\Desktop\SharingFolder\SubFolder.torrent',
+    peerList = [("10.229.102.243", 6881)]
+    
+    peer = P2PConnection(r'C:\Users\User\Desktop\SubFolder.torrent',
                           our_Peer_ID, peerList)
-    peer.create_connection(6666)
+    peer.listen_for_peers(6666)
