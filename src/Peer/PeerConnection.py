@@ -24,12 +24,11 @@ class P2PConnection:
         self.isEnoughPiece = False
         self.isDownloadComplete = False
 
-        self.downloader = Downloader(torrent_file_path, our_peer_id, peerList)
+        self.downloader = Downloader(torrent_file_path, our_peer_id)
         self.barrier = Barrier(len(peerList) + 1)
         self.peer_event = {peer: Event() for peer in peerList}
         self.peer_block_requests = {peer: [] for peer in peerList}
-       
-        self.piece_data = {}
+    
         self.isEnoughPiece = False
         self.uploader = Upload(self.downloader.torrent_info, 'path/to/piece_folder')
 
@@ -230,18 +229,15 @@ class P2PConnection:
                 custom = hashlib.sha1(self.piece_data[rarest_piece]).hexdigest()
                 if torrent_info_hash == custom:
                     self.downloader.update_pieces(rarest_piece, self.piece_data[rarest_piece], torrent_info_hash)
-                    for i, block in enumerate(request_blocks):
-                        peer = selected_peers[i % len(selected_peers)]
-                        index, start, end = block
-                        self.contributor[peer] += end - start
+                    # for i, block in enumerate(request_blocks):
+                    #     peer = selected_peers[i % len(selected_peers)]
+                    #     index, start, end = block
+                    #     self.contributor[peer] += end - start
 
                     del self.piece_data[rarest_piece]
                     break
-
-
-    
-
-
+                else:
+                    self.piece_data = {}
 
 
 
@@ -281,3 +277,22 @@ class P2PConnection:
             logging.error(f"Error handling peer {addr}: {e}")
         finally:
             conn.close()
+
+def get_my_IP():
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.connect(("8.8.8.8", 80))
+    my_IP = s.getsockname()[0]
+    s.close()
+    return my_IP
+
+import hashlib
+
+if __name__ == "__main__":
+    my_IP = get_my_IP()
+    print(my_IP)
+    our_Peer_ID = hashlib.sha1(my_IP.encode('utf-8')).hexdigest()
+
+    peerList = [("192.168.1.1", 6881)]
+    peer = P2PConnection(r'C:\Users\MyClone\OneDrive\Desktop\SharingFolder\SubFolder.torrent',
+                          our_Peer_ID, peerList)
+    peer.create_connection(6666)
