@@ -43,7 +43,7 @@ class P2PConnection:
                 send_message.send_handshake_message(s, self.downloader.info_hash, self.our_peer_id)
 
                 handshake_response = s.recv(68)
-                if handshake_response[28:48] != self.downloader.info_hash.encode('utf-8'):
+                if handshake_response[28:68] != self.downloader.info_hash.encode('utf-8'):
                     logging.error(f"Handshake failed with {peer_ip}:{peer_port}")
                     return
 
@@ -262,7 +262,7 @@ class P2PConnection:
         try:
             # Nhận handshake từ peer gửi đến
             handshake = conn.recv(68)
-            received_info_hash = handshake[28:48]
+            received_info_hash = handshake[28:68]
 
             if self.uploader.check_info_hash(received_info_hash.decode('utf-8')):
              # Gửi lại handshake phản hồi nếu info_hash đúng
@@ -276,8 +276,6 @@ class P2PConnection:
         finally:
             conn.close()
     
-    def create_listener(self, listen_port):
-        Thread(target=self.listen_for_peers, args=(listen_port,)).start()
 
 # def get_my_IP():
 #     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -294,10 +292,11 @@ if __name__ == "__main__":
 
     our_Peer_ID = "10.229.102.243:6868"
 
-    peerList = [("10.229.115.137", 6666)]
+    peerList = [("10.229.102.243", 6666)]
     peer = P2PConnection(r'C:\Users\MyClone\OneDrive\Desktop\SharingFolder\SubFolder.torrent',
                           our_Peer_ID, peerList)
-    peer.create_connection()
+    # peer.create_connection()
+    peer.listen_for_peers(6868)
     
     # My IP:  10.229.102.243
     # Lam IP: 10.229.115.137 port: 6666
