@@ -39,18 +39,11 @@ class P2PConnection:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.settimeout(60)
                 s.connect((peer_ip, peer_port))
-
+                
                 send_message = SendMessageP2P()
                 send_message.send_handshake_message(s, self.downloader.torrent_info.info_hash, self.our_peer_id)
 
                 handshake_response = s.recv(88)
-
-                # handshake_response = handshake_response.decode('utf-8')
-                # logging.info(f"Compare: {handshake_response[28:48]}  {self.downloader.torrent_info.info_hash}")
-
-                # if handshake_response[28:68] != self.downloader.torrent_info.info_hash:
-                #     logging.error(f"Handshake failed with {peer_ip}:{peer_port}")
-                #     return
 
                 logging.info(f"Handshake successful with {peer_ip}:{peer_port}")
 
@@ -70,15 +63,18 @@ class P2PConnection:
     
                 listen_thread = Thread(target=self._listen_thread, args=(s, peer, message_queue))
                 processor_thread = Thread(target=self._processor_thread, args=(s, peer, message_queue))
+
                 listen_thread.start()
                 processor_thread.start()
 
                 self.barrier.wait()
                 
                 while not self.isEnoughPiece:
+                    logging.info(f"Wait for unlock: ")
+                    self.peer_event[peer].clear()
+                    self.peer_event[peer].wait()
+                    
                     self._send_block_request(s, peer)
-                    # if self.isDownloadComplete and not self.isEnoughPiece:
-                    #     self._request_rarest_pieces()
 
                 
                 listen_thread.join()
@@ -132,6 +128,7 @@ class P2PConnection:
             self.peer_block_requests[peer] = []
 
     def _handle_unchoke_message(self, peer):
+        logging.info(f"Unlock request from unchoke message")
         self.peer_event[peer].set()
 
     def _handle_have_message(self, payload, peer):
@@ -143,7 +140,7 @@ class P2PConnection:
         
         index = struct.unpack('>I', payload[:4])[0]         # Index: 4 bytes
         begin = struct.unpack('>I', payload[4:8])[0]        # Begin: 4 bytes
-        block_data = payload[8:]                    # Block data: Rest of the payload   
+        block_data = payload[8:]                            # Block data: Rest of the payload   
 
         with self.lock:
             if index not in self.piece_data:
@@ -161,16 +158,14 @@ class P2PConnection:
 
     def _send_block_request(self, s, peer):
         try:
-            if not self.peer_block_requests[peer]:
-                self.peer_event[peer].clear()
-                self.peer_event[peer].wait()
-                
-
             send_message = SendMessageP2P()
             index, start, end = self.peer_block_requests[peer].pop(0)
             send_message.send_interested_message(s)
             
+            self.peer_event[peer].clear()
             self.peer_event[peer].wait()
+
+            logging.info(f"Wait for unchoke message")
             ## Wait for unchoke message
 
             send_message.send_request_message(index, start, end - start, s)
@@ -211,11 +206,12 @@ class P2PConnection:
                 self.isDownloadComplete = False
 
                 request_blocks = self.downloader.download_piece(rarest_piece)
-                selected_peers = random.sample(self.downloader.having_pieces_list[rarest_piece], min(4, len(self.downloader.having_pieces_list[rarest_piece])))
+                selected_peers = random.sample(self.downloader.having_pieces_list[rarest_piece], min(2, len(self.downloader.having_pieces_list[rarest_piece])))
 
                 for i, block in enumerate(request_blocks):
                     peer = selected_peers[i % len(selected_peers)]
                     self.peer_block_requests[peer].append(block)
+                    logging.info(f"Unlock peer from request racest pieces.")
                     self.peer_event[peer].set()
                 
                 custom = hashlib.sha1(self.piece_data[rarest_piece]).hexdigest()
@@ -270,9 +266,10 @@ if __name__ == "__main__":
     # my_IP = get_my_IP()
     # print(my_IP)
 
-    our_Peer_ID = "192.168.56.1:6868"
+    our_Peer_ID = "192.168.49.255"
 
-    peerList = []
-    peer = P2PConnection(r'C:\Users\MyClone\OneDrive\Desktop\SharingFolder\hello.torrent',
+    peerList = [("192.168.56.1", 6868)]
+    peer = P2PConnection(r'/home/hogiathang/Desktop/Computer_Network/Bittorent/hello.torrent',
                           our_Peer_ID, peerList)
-    peer.listen_for_peers(6868)
+    
+    peer.create_connection(6000)
