@@ -59,11 +59,14 @@ class Upload:
                 bitfield = f.read()
 
             # Prepare bitfield message
-            bitfield_message = struct.pack('>IB', len(bitfield) + 1, 5) + bitfield
+            bitfield_length = struct.pack('>I', len(bitfield) + 1)
+            bitfield_message_id = struct.pack('B', 5)
+            bitfield_message = bitfield_length + bitfield_message_id + bitfield
 
             # Send bitfield message
             conn.sendall(bitfield_message)
             logging.info(f"Sent bitfield to peer {conn.getpeername()}")
+            
         except (FileNotFoundError, IOError) as e:
             logging.error(f"Error reading bitfield from disk: {e}")
         except socket.error as e:
@@ -144,7 +147,6 @@ class Upload:
                 # Sắp xếp và chọn top 5 peer
                 sorted_peers = sorted(self.contribution_rank.items(), key=lambda x: x[1], reverse=True)
                 self.unchoke_list = [peer for peer, _ in sorted_peers[:5]]
-                
                 for peer in self.unchoke_list:
                     self.send_unchoke_message(peer)
                 logging.info(f"Updated unchoke list: {self.unchoke_list}")
@@ -176,10 +178,9 @@ class Upload:
             self.send_choke_message_conn(conn)
 
     def update_contribution_rank(self, peer):
-        with self.lock:
-            # If peer is not in the contribution rank, add it with a contribution score of 0
-            if peer not in self.contribution_rank:
-                self.contribution_rank[peer] = 0
+        # If peer is not in the contribution rank, add it with a contribution score of 0
+        if peer not in self.contribution_rank:
+            self.contribution_rank[peer] = 0
 
     def upload_flow(self, conn):
         """Thực hiện các bước để upload cho một kết nối `peer`."""
@@ -194,17 +195,22 @@ class Upload:
                 conn.close()
                 return
 
-            self.update_contribution_rank(received_peer_ip)
-
             # 2. Gửi handshake response
             self.send_handshake_message(conn, self.torrent_info.info_hash, self.peer_id)
 
             # 3. Gửi bitfield
             self.send_bitfield(conn)
 
+            message_response = struct.unpack('B', conn.recv(1))[0]
+
+            while message_response != 1:
+                self.send_bitfield(conn)
+                message_response = struct.unpack('B', conn.recv(1))[0]
+
             # 4. Thêm peer vào danh sách với thông tin socket
             with self.lock:
                 self.peer_sockets[received_peer_ip] = conn
+                self.update_contribution_rank(received_peer_ip)
 
             # 5. Xử lý yêu cầu từ peer
             while True:
@@ -233,4 +239,8 @@ class Upload:
                 # Loại bỏ peer khỏi danh sách khi kết nối đóng
                 if received_peer_ip in self.peer_sockets:
                     del self.peer_sockets[received_peer_ip]
+                
+                if received_peer_ip in self.contribution_rank:
+                    del self.contribution_rank[received_peer_ip]
             conn.close()
+    
