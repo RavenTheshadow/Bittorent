@@ -11,7 +11,6 @@ class SendMessageP2P:
         s.send(pstrlen + pstr + reserved + info_hash + peer_id)
     
     def send_keep_alive_message(self, s: socket.socket):
-        time.sleep(30)
         s.send(struct.pack('>I', 0))
 
     def send_interested_message(self, s: socket.socket):
