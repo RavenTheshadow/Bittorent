@@ -81,15 +81,11 @@ class Upload:
     def send_handshake_message(self, s, info_hash: str, peer_id: str):
         self.msg_sender.send_handshake_message(s, info_hash, peer_id)
 
-    def handle_request(self, socket, request_data):
+    def handle_request(self, socket, payload):
         """Handles a request message from a peer."""
-
-        index, begin, length = struct.unpack('>III', request_data)
-        
-        # Get piece info hash
+        index, begin, length = struct.unpack('>III', payload)
         piece_info_hash = self.torrent_info.get_piece_info_hash(index).decode('utf-8')
-
-        piece_path = os.path.join(self.piece_folder, f"{piece_info_hash}")
+        piece_path = os.path.join(self.piece_folder, f'{piece_info_hash}')
         
         try:
             with open(piece_path, 'rb') as f:
@@ -218,10 +214,9 @@ class Upload:
                     break
 
                 # Phân tích yêu cầu và xử lý
-                length_prefix = struct.unpack('>I', request_data[:4])[0]  # Giải mã length_prefix
-                message_id = struct.unpack('B', request_data[4:5])[0]  # Giải mã message_id
-                payload = request_data[5:]  # Dữ liệu yêu cầu
-
+                length_prefix = struct.unpack('>I', request_data[:4])[0]    # Giải mã length_prefix
+                message_id = struct.unpack('B', request_data[4:5])[0]       # Giải mã message_id
+                payload = request_data[5:]                                  # Payload
                 if message_id == 2:  # interested message
                     self.handle_interested(conn, received_peer_ip)
                 

@@ -29,6 +29,7 @@ class P2PConnection:
         self.barrier = Barrier(len(peerList) + 1)
         self.peer_event = {peer: Event() for peer in peerList}
         self.peer_block_requests = {peer: [] for peer in peerList}
+        self.unchoke = {peer: False for peer in peerList}
     
         self.isEnoughPiece = False
         self.uploader = Upload(torrent_file_path,r'DownloadFolder/mapping_file.json',our_peer_id)
@@ -58,9 +59,9 @@ class P2PConnection:
                                     self.downloader.having_pieces_list[i].append(peer)
 
                 logging.info(f"Received bitfield from {peer[0]}:{peer[1]}")
-                                
+                
                 message_queue = queue.Queue()
-    
+
                 listen_thread = Thread(target=self._listen_thread, args=(s, peer, message_queue))
                 processor_thread = Thread(target=self._processor_thread, args=(s, peer, message_queue))
 
@@ -76,7 +77,6 @@ class P2PConnection:
                     
                     self._send_block_request(s, peer)
 
-                
                 listen_thread.join()
                 processor_thread.join()
                 
@@ -105,6 +105,26 @@ class P2PConnection:
                 self._handle_message(message, peer)
             except queue.Empty:
                 pass
+    
+    def _send_block_request(self, s, peer):
+        try:                
+            send_message = SendMessageP2P()
+            if not self.peer_block_requests[peer]:
+                logging.info(f"No block requests for {peer}")
+                return
+
+            index, start, end = self.peer_block_requests[peer].pop(0)
+            send_message.send_interested_message(s)
+            
+            ### Wait for unchoke message
+            while self.unchoke[peer] == False:
+                pass
+            ## Wait for unchoke message
+            send_message.send_request_message(index, start, end - start, s)
+
+        except (socket.timeout, socket.error, IndexError) as e:
+            logging.error(f"Error: {e}")
+            pass
 
     def _handle_message(self, message, peer):
         if len(message) < 1:
@@ -124,12 +144,11 @@ class P2PConnection:
 
     def _handle_choke_message(self, peer):
         with self.lock:
-            self.peer_event[peer].clear()
-            self.peer_block_requests[peer] = []
+            self.unchoke[peer] = False
 
     def _handle_unchoke_message(self, peer):
-        logging.info(f"Unlock request from unchoke message")
-        self.peer_event[peer].set()
+        with self.lock:
+            self.unchoke[peer] = True
 
     def _handle_have_message(self, payload, peer):
         piece_index = struct.unpack('>I', payload)[0]
@@ -151,6 +170,7 @@ class P2PConnection:
         if len(self.piece_data[index]) == self.downloader.torrent_info.get_piece_sizes()[index]:
             piece_hash = hashlib.sha1(self.piece_data[index]).hexdigest()
             expected_hash = self.downloader.torrent_info.get_piece_info_hash(index)
+            
             if piece_hash == expected_hash:
                 self.uploader.contribution_rank[peer] += len(self.piece_data[index])
             else:
@@ -162,9 +182,8 @@ class P2PConnection:
             index, start, end = self.peer_block_requests[peer].pop(0)
             send_message.send_interested_message(s)
             
-            self.peer_event[peer].clear()
-            self.peer_event[peer].wait()
-
+            while self.unchoke[peer] == False:
+                pass
             logging.info(f"Wait for unchoke message")
             ## Wait for unchoke message
 
@@ -172,7 +191,6 @@ class P2PConnection:
         except (socket.timeout, socket.error, IndexError) as e:
             logging.error(f"Error: {e}")
             pass
-
 
     def create_connection(self,listen_port):
         self.downloader = Downloader(self.torrent_file_path, self.our_peer_id)
@@ -213,6 +231,8 @@ class P2PConnection:
                     self.peer_block_requests[peer].append(block)
                     logging.info(f"Unlock peer from request racest pieces.")
                     self.peer_event[peer].set()
+
+                
                 
                 custom = hashlib.sha1(self.piece_data[rarest_piece]).hexdigest()
                 if torrent_info_hash == custom:
@@ -261,6 +281,7 @@ class P2PConnection:
             conn.close()
 
 import time
+
 
 if __name__ == "__main__":
     # my_IP = get_my_IP()
