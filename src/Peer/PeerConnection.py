@@ -29,6 +29,7 @@ class P2PConnection:
         self.barrier = Barrier(len(peerList) + 1)
         self.peer_event = {peer: Event() for peer in peerList}
         self.peer_block_requests = {peer: [] for peer in peerList}
+        self.unchoke = {peer: False for peer in peerList}
     
         self.isEnoughPiece = False
         self.uploader = Upload(torrent_file_path,r'DownloadFolder/mapping_file.json',our_peer_id)
@@ -119,8 +120,9 @@ class P2PConnection:
             index, start, end = self.peer_block_requests[peer].pop(0)
             send_message.send_interested_message(s)
             
-            self.peer_event[peer].clear()
-            self.peer_event[peer].wait()
+            ### Wait for unchoke message
+            while self.unchoke[peer] == False:
+                pass
             ## Wait for unchoke message
             send_message.send_request_message(index, start, end - start, s)
 
@@ -146,11 +148,11 @@ class P2PConnection:
 
     def _handle_choke_message(self, peer):
         with self.lock:
-            self.peer_event[peer].clear()
-            self.peer_block_requests[peer] = []
+            self.unchoke[peer] = False
 
     def _handle_unchoke_message(self, peer):
-        self.peer_event[peer].set()
+        with self.lock:
+            self.unchoke[peer] = True
 
     def _handle_have_message(self, payload, peer):
         piece_index = struct.unpack('>I', payload)[0]
@@ -268,6 +270,7 @@ class P2PConnection:
             conn.close()
 
 import time
+
 
 if __name__ == "__main__":
     # my_IP = get_my_IP()

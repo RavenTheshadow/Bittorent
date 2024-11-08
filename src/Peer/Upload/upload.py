@@ -84,7 +84,7 @@ class Upload:
     def handle_request(self, socket, payload):
         """Handles a request message from a peer."""
         index, begin, length = struct.unpack('>III', payload)
-        piece_info_hash = self.torrent_info.get_piece_info_hash(index)
+        piece_info_hash = self.torrent_info.get_piece_info_hash(index).decode('utf-8')
         piece_path = os.path.join(self.piece_folder, f'{piece_info_hash}')
         
         try:
