@@ -34,51 +34,102 @@ class P2PConnection:
         self.isEnoughPiece = False
         self.uploader = Upload(torrent_file_path,r'DownloadFolder/mapping_file.json',our_peer_id)
 
+    def receive_bitfield(self, s, peer):
+        try:
+            # Read the length prefix (4 bytes)
+            length_prefix = self._recv_exactly(s, 4)
+            bitfield_length = struct.unpack('>I', length_prefix)[0]
+
+            # Read the message ID (1 byte)
+            message_id = self._recv_exactly(s, 1)
+            bitfield_message_id = struct.unpack('B', message_id)[0]
+
+            if bitfield_message_id == 5:
+                # Read the bitfield data
+                bitfield_data = self._recv_exactly(s, bitfield_length - 1)
+                with self.lock:
+                    for i in range(len(bitfield_data) * 8):
+                        if bitfield_data[i // 8] & (1 << (7 - (i % 8))):
+                            if i < self.downloader.pieces_length:
+                                if peer not in self.downloader.having_pieces_list[i]:
+                                    self.downloader.having_pieces_list[i].append(peer)
+                logging.info(f"Received bitfield from {peer[0]}:{peer[1]}")
+        except (struct.error, socket.error) as e:
+            logging.error(f"Error processing bitfield from {peer[0]}:{peer[1]} - {e}")
+
+    def _recv_exactly(self, s, num_bytes):
+        """Helper method to receive exactly num_bytes from the socket."""
+        data = b''
+        while len(data) < num_bytes:
+            packet = s.recv(num_bytes - len(data))
+            if not packet:
+                raise socket.error("Connection closed unexpectedly")
+            data += packet
+        return data
+
+
     def connect_to_peer(self, peer):
         peer_ip, peer_port = peer
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.settimeout(60)
                 s.connect((peer_ip, peer_port))
-
+                
                 send_message = SendMessageP2P()
                 send_message.send_handshake_message(s, self.downloader.torrent_info.info_hash, self.our_peer_id)
 
                 handshake_response = s.recv(88)
+                handshake_response = handshake_response.decode('utf-8')
 
-                # handshake_response = handshake_response.decode('utf-8')
-                # logging.info(f"Compare: {handshake_response[28:48]}  {self.downloader.torrent_info.info_hash}")
-
-                # if handshake_response[28:68] != self.downloader.torrent_info.info_hash:
-                #     logging.error(f"Handshake failed with {peer_ip}:{peer_port}")
-                #     return
+                if handshake_response[28:68] != self.downloader.torrent_info.info_hash:
+                    return
 
                 logging.info(f"Handshake successful with {peer_ip}:{peer_port}")
+                
+                # self.receive_bitfield(s, peer)
 
-                bitfield_length = struct.unpack('>I', s.recv(4))[0]
-                bitfield_message_id = struct.unpack('B', s.recv(1))[0]
-                if bitfield_message_id == 5:
-                    bitfield = s.recv(bitfield_length - 1)
-                    with self.lock:
-                        for i, has_piece in enumerate(bitfield):
-                            if has_piece and i < self.downloader.pieces_length:
-                                if peer not in self.downloader.having_pieces_list[i]:
-                                    self.downloader.having_pieces_list[i].append(peer)
+                while True:
+                    bitfield_msg = s.recv(1024)
+
+                    bitfield_length = struct.unpack('>I', bitfield_msg[:4])[0]
+                    bitfield_message_id = struct.unpack('B', bitfield_msg[4:5])[0]
+                    logging.info(f"bitfield_length: {bitfield_length}")
+                    logging.info(f"message ID: {bitfield_message_id}")
+                    
+                    if bitfield_message_id == 5:
+                        bitfield = bitfield_msg[5:]
+                        with self.lock:
+                            for i, has_piece in enumerate(bitfield):
+                                if has_piece and i < self.downloader.pieces_length:
+                                    if peer not in self.downloader.having_pieces_list[i]:
+                                        self.downloader.having_pieces_list[i].append(peer)
+
+                        msg = struct.pack('>B', 1)
+                        s.send(msg)
+                        break
+                    else:
+                        msg = struct.pack('>B', 0)
+                        s.send(msg)
 
                 logging.info(f"Received bitfield from {peer[0]}:{peer[1]}")
-                
+        
+                self.barrier.wait()
+
                 message_queue = queue.Queue()
 
                 listen_thread = Thread(target=self._listen_thread, args=(s, peer, message_queue))
                 processor_thread = Thread(target=self._processor_thread, args=(s, peer, message_queue))
+
                 listen_thread.start()
                 processor_thread.start()
 
-                self.barrier.wait()
+                
                 
                 while not self.isEnoughPiece:
+                    logging.info(f"Wait for unlock: ")
                     self.peer_event[peer].clear()
                     self.peer_event[peer].wait()
+                    
                     self._send_block_request(s, peer)
 
                 listen_thread.join()
@@ -163,7 +214,7 @@ class P2PConnection:
         
         index = struct.unpack('>I', payload[:4])[0]         # Index: 4 bytes
         begin = struct.unpack('>I', payload[4:8])[0]        # Begin: 4 bytes
-        block_data = payload[8:].decode('utf-8')                    # Block data: Rest of the payload   
+        block_data = payload[8:]                            # Block data: Rest of the payload   
 
         with self.lock:
             if index not in self.piece_data:
@@ -180,11 +231,27 @@ class P2PConnection:
             else:
                 logging.error(f"Piece {index} hash mismatch. Expected {expected_hash}, got {piece_hash}")
 
+    def _send_block_request(self, s, peer):
+        try:
+            send_message = SendMessageP2P()
+            index, start, end = self.peer_block_requests[peer].pop(0)
+            send_message.send_interested_message(s)
+            
+            while self.unchoke[peer] == False:
+                pass
+            logging.info(f"Wait for unchoke message")
+            ## Wait for unchoke message
+
+            send_message.send_request_message(index, start, end - start, s)
+        except (socket.timeout, socket.error, IndexError) as e:
+            logging.error(f"Error: {e}")
+            pass
+
     def create_connection(self,listen_port):
         self.downloader = Downloader(self.torrent_file_path, self.our_peer_id)
         # Start a dedicated listener thread
-        listener_thread = Thread(target=self.listen_for_peers, args=(listen_port,))
-        listener_thread.start()
+        # listener_thread = Thread(target=self.listen_for_peers, args=(listen_port,))
+        # listener_thread.start()
 
 
         with ThreadPoolExecutor(max_workers=len(self.peerList)) as executor:
@@ -217,8 +284,7 @@ class P2PConnection:
                 for i, block in enumerate(request_blocks):
                     peer = selected_peers[i % len(selected_peers)]
                     self.peer_block_requests[peer].append(block)
-                    
-                    logging.info(f"Unlocked {peer} to send block request")
+                    logging.info(f"Unlock peer from request racest pieces.")
                     self.peer_event[peer].set()
 
                 
@@ -276,9 +342,10 @@ if __name__ == "__main__":
     # my_IP = get_my_IP()
     # print(my_IP)
 
-    our_Peer_ID = "192.168.56.1"
+    our_Peer_ID = "192.168.49.255"
 
-    peerList = []
-    peer = P2PConnection(r'C:\Users\MyClone\OneDrive\Desktop\SharingFolder\hello.torrent',
+    peerList = [("192.168.56.1", 6868)]
+    peer = P2PConnection(r'/home/hogiathang/Desktop/Computer_Network/Bittorent/hello.torrent',
                           our_Peer_ID, peerList)
-    peer.listen_for_peers(6868)
+    
+    peer.create_connection(6000)
