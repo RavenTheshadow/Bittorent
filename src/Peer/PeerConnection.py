@@ -13,13 +13,12 @@ from Upload.upload import Upload
 logging.basicConfig(level=logging.INFO)
 
 class P2PConnection:
-    def __init__(self, torrent_file_path, our_peer_id="191.168.1.1", peerList=[]):
+    def __init__(self, torrent_file_path, our_peer_id="192.168.56.1", peerList=[]):
         self.lock = Lock()
         self.our_peer_id = our_peer_id
         self.peerList = peerList
         
         self.piece_data = {}
-        self.contributor = {peer: 0 for peer in peerList}
         
         self.isEnoughPiece = False
         self.isDownloadComplete = False
@@ -32,7 +31,7 @@ class P2PConnection:
         self.peer_block_requests = {peer: [] for peer in peerList}
     
         self.isEnoughPiece = False
-        self.uploader = Upload(torrent_file_path,r'DownloadFolder/mapping_file.json')
+        self.uploader = Upload(torrent_file_path,r'DownloadFolder/mapping_file.json',our_peer_id)
 
     def connect_to_peer(self, peer):
         peer_ip, peer_port = peer
@@ -156,7 +155,7 @@ class P2PConnection:
             piece_hash = hashlib.sha1(self.piece_data[index]).hexdigest()
             expected_hash = self.downloader.torrent_info.get_piece_info_hash(index)
             if piece_hash == expected_hash:
-                self.contributor[peer] += len(block_data)
+                self.uploader.contribution_rank[peer] += len(self.piece_data[index])
             else:
                 logging.error(f"Piece {index} hash mismatch. Expected {expected_hash}, got {piece_hash}")
 
@@ -259,21 +258,7 @@ class P2PConnection:
     def handle_incoming_peer(self, conn, addr):
         """Handles an incoming peer connection."""
         try:
-            handshake = conn.recv(88)
-            received_info_hash = handshake[28:68]
-
-            if self.uploader.check_info_hash(received_info_hash.decode('utf-8')):
-                self.uploader.send_handshake_response(conn, self.our_peer_id)
-                logging.info(f"Sent handshake response to {addr}")
-
-                #Gửi bitfield
-                self.uploader.send_bitfield(conn)
-
-                while True:
-                    pass
-            else:
-                logging.error(f"Invalid info_hash received from {addr}")
-                conn.close()
+            self.uploader.upload_flow(conn)
         except (socket.error, struct.error) as e:
             logging.error(f"Error handling peer {addr}: {e}")
         finally:
