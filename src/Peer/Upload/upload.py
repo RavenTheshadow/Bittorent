@@ -107,8 +107,6 @@ class Upload:
     def handle_interested(self, conn, peer):
         """Handles an interested message from a peer."""
         with self.lock:
-            self.interested_peers.add(peer)
-
             if peer in self.unchoke_list:
                 self.msg_sender.send_unchoke_message(conn)
             else:
@@ -151,3 +149,47 @@ class Upload:
                         self.unchoke_list.append(random_peer)
                         self.msg_sender.send_unchoke_message(random_peer) # Send unchoke message
                         logging.info(f"Randomly unchoked peer: {random_peer}")
+
+
+    def upload_flow(self, conn):
+        """Thực hiện các bước để upload cho một kết nối `peer`."""
+        try:
+            # 1. Nhận và kiểm tra info_hash từ peer
+            received_info_hash = self.receive_info_hash(conn)
+            if not self.check_info_hash(received_info_hash):
+                logging.error("Info hash mismatch. Closing connection.")
+                conn.close()
+                return
+
+            # 2. Gửi handshake response
+            self.send_handshake_response(conn, self.peer_id)
+
+            # 3. Gửi bitfield (danh sách các phần mà peer này có)
+            self.send_bitfield(conn)
+
+            # 4. Khởi chạy các tác vụ định kỳ
+            self.start_periodic_tasks()
+
+            # 5. Bắt đầu xử lý các yêu cầu từ peer
+            while True:
+                request_data = conn.recv(1024)  # Nhận yêu cầu từ peer
+                if not request_data:
+                    logging.info("Peer disconnected.")
+                    break
+
+                # Phân tích yêu cầu và xử lý
+                message_id = struct.unpack('>B', request_data[:1])[0]
+                if message_id == 2:  # interested message
+                    peer = conn.getpeername()
+                    self.handle_interested(conn, peer)
+                
+                elif message_id == 6:  # request message
+                    self.handle_request(conn, request_data[1:])
+                
+                else:
+                    logging.warning(f"Không hỗ trợ message_id: {message_id}")
+
+        except (socket.error, struct.error) as e:
+            logging.error(f"Lỗi trong upload flow: {e}")
+        finally:
+            conn.close()
