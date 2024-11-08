@@ -19,7 +19,7 @@ class Downloader:
     def download_piece(self, piece_index):
         try:
             piece_size = self.torrent_info.get_piece_sizes()[piece_index]
-            block_size = 8 * 1024
+            block_size = 256 * 1024
             return [(piece_index, offset, offset + min(block_size, piece_size - offset)) for offset in range(0, piece_size, block_size)]
         except Exception as e:
             print(f"Error downloading piece {piece_index}: {e}")

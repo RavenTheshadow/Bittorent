@@ -46,7 +46,7 @@ class TorrentInfo:
 
 if __name__ == "__main__":
     # Example usage
-    torrent_info = TorrentInfo(r'C:\Users\MyClone\OneDrive\Desktop\SharingFolder\SubFolder.torrent')
+    torrent_info = TorrentInfo(r'C:\Users\MyClone\OneDrive\Desktop\SharingFolder\hello.torrent')
     print(f"Info Hash: {torrent_info.info_hash}")
     print(f"Piece Length: {torrent_info.piece_length}")
     print(f"Name: {torrent_info.name}")
