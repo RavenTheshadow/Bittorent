@@ -37,7 +37,7 @@ class Downloader:
         self.bit_field[index] = 1
         self.file_structure.bitfield[index] = 1
         self.file_structure.save_bitfield(self.download_dir / 'bitfield')
-        piece_path = self.download_dir / 'pieces' / f"{info_hash}.piece"
+        piece_path = self.download_dir / 'pieces' / f"{info_hash}"
         self.file_structure.save_piece_data(piece_path, piece)
         self.having_pieces_list[index] = [] # None
     
@@ -47,7 +47,7 @@ class Downloader:
 if __name__ == "__main__":
     tester = Downloader(r'C:\Users\MyClone\OneDrive\Desktop\SharingFolder\hello.torrent', "127.119.128.1:6681")
     for i in range(52):
-        tester.update_pieces(i, b"0000", f"piece_{i}")
+        tester.update_pieces(i, b"Hello", tester.torrent_info.get_piece_info_hash(i).decode('utf-8'))
         
     tester.having_pieces_list[0].append(("192.168.1.1", 6681))
     tester.having_pieces_list[1].append(("191.129.12.1", 6682))

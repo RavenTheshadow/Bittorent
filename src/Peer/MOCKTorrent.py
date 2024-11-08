@@ -37,12 +37,12 @@ class TorrentInfo:
         return piece_sizes
     
     def get_piece_info_hash(self, piece_index):
-        start = piece_index * 20
-        end = start + 20
+        start = piece_index * 40
+        end = start + 40
         return self.pieces[start:end]
 
     def get_number_of_pieces(self):
-        return len(self.pieces) // 20
+        return len(self.pieces) // 40
 
 if __name__ == "__main__":
     # Example usage
