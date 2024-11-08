@@ -9,6 +9,7 @@ import struct
 import logging
 import socket
 import sys
+from Message.sendMessage import SendMessageP2P
 from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
@@ -22,6 +23,7 @@ class Upload:
         self.contribution_rank = {}  # Bảng xếp hạng đóng góp
         self.unchoke_list = []       # Danh sách peer được unchoke
         self.lock = threading.Lock()
+        self.msg_sender = SendMessageP2P()
 
     def _get_piece_folder(self, mapping_file_path):
         """Retrieve the piece folder path based on the info_hash from the mapping file."""
@@ -72,12 +74,7 @@ class Upload:
 
 
     def send_handshake_message(self, s, info_hash: str, peer_id: str):
-        pstrlen = struct.pack('B', 19)
-        pstr = b'BitTorrent protocol'
-        reserved = struct.pack('8B', *[0]*8)
-        info_hash = info_hash.encode('utf-8')
-        peer_id = peer_id.encode('utf-8')
-        s.send(pstrlen + pstr + reserved + info_hash + peer_id)
+        self.msg_sender.send_handshake_message(s, info_hash, peer_id)
 
     def send_handshake_response(self, socket, peer_id):
         pstr = "BitTorrent protocol"
@@ -107,23 +104,50 @@ class Upload:
         # Thread chọn ngẫu nhiên một peer ngoài top 5 mỗi 30 giây
         threading.Thread(target=self.random_unchoke_peer, daemon=True).start()
 
+    def handle_interested(self, conn, peer):
+        """Handles an interested message from a peer."""
+        with self.lock:
+            self.interested_peers.add(peer)
+
+            if peer in self.unchoke_list:
+                self.msg_sender.send_unchoke_message(conn)
+            else:
+                self.msg_sender.send_choke_message(conn)
+
+
     def update_choke_status(self):
+        """Updates the unchoke list based on contribution ranking every 10 seconds."""
         while True:
             time.sleep(10)
             with self.lock:
-                # Sắp xếp peers dựa trên đóng góp
+                # Sort peers based on contribution and select the top 5 for unchoking
                 sorted_peers = sorted(self.contribution_rank.items(), key=lambda x: x[1], reverse=True)
-                # Giữ top 5 trong danh sách unchoke
+                
+                # Clear the unchoke list and add top 5 peers
+                self.unchoke_list.clear()
                 self.unchoke_list = [peer for peer, _ in sorted_peers[:5]]
+                
+                # Send choke/unchoke messages based on updated list
+                for peer in self.contribution_rank.keys():
+                    if peer in self.unchoke_list:
+                        self.msg_sender.send_unchoke_message(peer)  
+                    # else:
+                    #     self.msg_sender.send_choke_message(peer)    # Implement this method to send choke
+
                 logging.info(f"Updated unchoke list: {self.unchoke_list}")
 
     def random_unchoke_peer(self):
+        """Randomly unchokes a peer outside the top 5 every 30 seconds."""
         while True:
             time.sleep(30)
             with self.lock:
-                # Lấy tất cả các peer không nằm trong top 5
+                # Select peers that are not in the top 5
                 peers_outside_top5 = [peer for peer in self.contribution_rank if peer not in self.unchoke_list]
+                
+                # Randomly unchoke one peer outside the top 5 if any are available
                 if peers_outside_top5:
                     random_peer = random.choice(peers_outside_top5)
-                    self.unchoke_list.append(random_peer)
-                    logging.info(f"Randomly unchoked peer: {random_peer}")
+                    if random_peer not in self.unchoke_list:
+                        self.unchoke_list.append(random_peer)
+                        self.msg_sender.send_unchoke_message(random_peer) # Send unchoke message
+                        logging.info(f"Randomly unchoked peer: {random_peer}")

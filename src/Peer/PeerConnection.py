@@ -269,7 +269,6 @@ class P2PConnection:
                 #Gửi bitfield
                 self.uploader.send_bitfield(conn)
 
-                #
                 while True:
                     pass
             else:
@@ -279,7 +278,6 @@ class P2PConnection:
             logging.error(f"Error handling peer {addr}: {e}")
         finally:
             conn.close()
-    
 
 import time
 
@@ -287,14 +285,9 @@ if __name__ == "__main__":
     # my_IP = get_my_IP()
     # print(my_IP)
 
-    our_Peer_ID = "192.168.56.1:6000"
+    our_Peer_ID = "192.168.56.1:6868"
 
-    peerList = [("192.168.56.1", 6868)]
-    peer = P2PConnection(r'C:\Users\MyClone\OneDrive\Desktop\SharingFolder\SubFolder.torrent',
+    peerList = []
+    peer = P2PConnection(r'C:\Users\MyClone\OneDrive\Desktop\SharingFolder\hello.torrent',
                           our_Peer_ID, peerList)
-
-    p = Thread(target=peer.listen_for_peers, args=(6868, ))
-    p.start()
-
-    time.sleep(1)
-    peer.create_connection(6000)
+    peer.listen_for_peers(6868)

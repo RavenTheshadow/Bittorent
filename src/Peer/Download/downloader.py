@@ -45,9 +45,10 @@ class Downloader:
             return all(self.bit_field)
 
 if __name__ == "__main__":
-    tester = Downloader(r'C:\Users\MyClone\OneDrive\Desktop\SharingFolder\SubFolder.torrent', "127.119.128.1:6681")
-    # for i in range(52):
-    #     tester.update_pieces(i, b"0000", tester.torrent_info.get_piece_info_hash(i))
+    tester = Downloader(r'C:\Users\MyClone\OneDrive\Desktop\SharingFolder\hello.torrent', "127.119.128.1:6681")
+    for i in range(52):
+        tester.update_pieces(i, b"0000", tester.torrent_info.get_piece_info_hash(i))
+        
     tester.having_pieces_list[0].append(("192.168.1.1", 6681))
     tester.having_pieces_list[1].append(("191.129.12.1", 6682))
     tester.having_pieces_list[1].append(("10.0.2.3", 8000))
