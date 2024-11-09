@@ -336,7 +336,7 @@ if __name__ == "__main__":
     # my_IP = get_my_IP()
     # print(my_IP)
 
-    our_Peer_ID = "10.230.149.200"
+    our_Peer_ID = "10.0.239.28"
 
     peerList = []
     peer = P2PConnection(r'C:\Users\MyClone\OneDrive\Desktop\SharingFolder\hello.torrent',
