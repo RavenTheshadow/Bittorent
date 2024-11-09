@@ -172,8 +172,8 @@ class P2PConnection:
             send_message.send_interested_message(s)
             
             ### Wait for unchoke message
-            while self.unchoke[peer] == False:
-                pass
+            while not self.unchoke[peer]:
+                time.sleep(1)  # Add a small sleep to avoid busy waiting
             ## Wait for unchoke message
             send_message.send_request_message(index, start, end - start, s)
 
@@ -222,7 +222,8 @@ class P2PConnection:
                 self.piece_data[index] = bytearray(piece_size)
             self.piece_data[index][begin:begin + len(block_data)] = block_data
 
-        self.barrier.wait()
+        # Wake up the waiting thread
+        self.peer_event[peer].set()
 
     def _send_block_request(self, s, peer):
         try:
@@ -250,7 +251,7 @@ class P2PConnection:
             
             for peer in self.peerList:
                 self.uploader.contribution_rank[peer[0]] = 0
-                
+
             self._request_rarest_pieces()
 
             for future in futures:
@@ -260,7 +261,7 @@ class P2PConnection:
         while True:
             rarest_piece = self.downloader.get_rarest_pieces()
             if rarest_piece is None:
-                if (self.downloader.is_having_all_pieces()):
+                if self.downloader.is_having_all_pieces():
                     self.isEnoughPiece = True
                     self.isDownloadComplete = True
                 else:
@@ -277,12 +278,13 @@ class P2PConnection:
                 for i, block in enumerate(request_blocks):
                     peer = selected_peers[i % len(selected_peers)]
                     self.peer_block_requests[peer].append(block)
-                    logging.info(f"Unlock peer from request racest pieces.")
+                    logging.info(f"Unlock peer from request rarest pieces.")
                     self.peer_event[peer].set()
-
-                # Wait for peer event complete
-                self.barrier.wait()
                 
+                # Wait for all peers to receive the block
+                for peer in selected_peers:
+                    self.peer_event[peer].wait(timeout=5)
+
                 custom = hashlib.sha1(self.piece_data[rarest_piece]).hexdigest()
                 if torrent_info_hash == custom:
                     self.downloader.update_pieces(rarest_piece, self.piece_data[rarest_piece], rarest_piece)
@@ -297,10 +299,6 @@ class P2PConnection:
                     break
                 else:
                     self.piece_data = {}
-
-
-
-
 
     # Phần này lâm viết 
 
@@ -338,7 +336,7 @@ if __name__ == "__main__":
     # my_IP = get_my_IP()
     # print(my_IP)
 
-    our_Peer_ID = "192.168.56.1"
+    our_Peer_ID = "10.230.149.200"
 
     peerList = []
     peer = P2PConnection(r'C:\Users\MyClone\OneDrive\Desktop\SharingFolder\hello.torrent',

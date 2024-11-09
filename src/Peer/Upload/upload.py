@@ -261,4 +261,3 @@ class Upload:
                 if received_peer_ip in self.contribution_rank:
                     del self.contribution_rank[received_peer_ip]
             conn.close()
-    
