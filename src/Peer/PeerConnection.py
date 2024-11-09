@@ -144,7 +144,7 @@ class P2PConnection:
     def _listen_thread(self, s: socket.socket, peer, message_queue: queue.Queue):
         try:
             while True:
-                message = s.recv(1024)
+                message = s.recv(256 * 1024 + 10)
                 if not message:
                     break
                 message_queue.put(message)
@@ -222,14 +222,7 @@ class P2PConnection:
                 self.piece_data[index] = bytearray(piece_size)
             self.piece_data[index][begin:begin + len(block_data)] = block_data
 
-        if len(self.piece_data[index]) == self.downloader.torrent_info.get_piece_sizes()[index]:
-            piece_hash = hashlib.sha1(self.piece_data[index]).hexdigest()
-            expected_hash = self.downloader.torrent_info.get_piece_info_hash(index)
-            
-            if piece_hash == expected_hash:
-                self.uploader.contribution_rank[peer] += len(self.piece_data[index])
-            else:
-                logging.error(f"Piece {index} hash mismatch. Expected {expected_hash}, got {piece_hash}")
+        self.barrier.wait()
 
     def _send_block_request(self, s, peer):
         try:
@@ -249,15 +242,15 @@ class P2PConnection:
 
     def create_connection(self,listen_port):
         self.downloader = Downloader(self.torrent_file_path, self.our_peer_id)
-        # Start a dedicated listener thread
-        # listener_thread = Thread(target=self.listen_for_peers, args=(listen_port,))
-        # listener_thread.start()
-
 
         with ThreadPoolExecutor(max_workers=len(self.peerList)) as executor:
             futures = [executor.submit(self.connect_to_peer, peer) for peer in self.peerList]
 
             self.barrier.wait()
+            
+            for peer in self.peerList:
+                self.uploader.contribution_rank[peer[0]] = 0
+                
             self._request_rarest_pieces()
 
             for future in futures:
@@ -279,7 +272,7 @@ class P2PConnection:
                 self.isDownloadComplete = False
 
                 request_blocks = self.downloader.download_piece(rarest_piece)
-                selected_peers = random.sample(self.downloader.having_pieces_list[rarest_piece], min(2, len(self.downloader.having_pieces_list[rarest_piece])))
+                selected_peers = random.sample(self.downloader.having_pieces_list[rarest_piece], min(5, len(self.downloader.having_pieces_list[rarest_piece])))
 
                 for i, block in enumerate(request_blocks):
                     peer = selected_peers[i % len(selected_peers)]
@@ -287,15 +280,18 @@ class P2PConnection:
                     logging.info(f"Unlock peer from request racest pieces.")
                     self.peer_event[peer].set()
 
-                
+                # Wait for peer event complete
+                self.barrier.wait()
                 
                 custom = hashlib.sha1(self.piece_data[rarest_piece]).hexdigest()
                 if torrent_info_hash == custom:
                     self.downloader.update_pieces(rarest_piece, self.piece_data[rarest_piece], rarest_piece)
-                    # for i, block in enumerate(request_blocks):
-                    #     peer = selected_peers[i % len(selected_peers)]
-                    #     index, start, end = block
-                    #     self.contributor[peer] += end - start
+                    
+                    for i, block in enumerate(request_blocks):
+                        peer = selected_peers[i % len(selected_peers)]
+                        index, start, end = block
+
+                        self.uploader.contribution_rank[peer[0]] += (end - start) 
 
                     del self.piece_data[rarest_piece]
                     break
@@ -342,10 +338,10 @@ if __name__ == "__main__":
     # my_IP = get_my_IP()
     # print(my_IP)
 
-    our_Peer_ID = "192.168.49.255"
+    our_Peer_ID = "192.168.56.1"
 
-    peerList = [("192.168.56.1", 6868)]
-    peer = P2PConnection(r'/home/hogiathang/Desktop/Computer_Network/Bittorent/hello.torrent',
+    peerList = []
+    peer = P2PConnection(r'C:\Users\MyClone\OneDrive\Desktop\SharingFolder\hello.torrent',
                           our_Peer_ID, peerList)
     
-    peer.create_connection(6000)
+    peer.listen_for_peers(6868)

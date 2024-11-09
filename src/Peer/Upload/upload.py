@@ -84,22 +84,40 @@ class Upload:
     def send_handshake_message(self, s, info_hash: str, peer_id: str):
         self.msg_sender.send_handshake_message(s, info_hash, peer_id)
 
-    def handle_request(self, socket, payload):
+    def handle_request(self, conn, payload):
         """Handles a request message from a peer."""
-        index, begin, length = struct.unpack('>III', payload)
-        piece_info_hash = self.torrent_info.get_piece_info_hash(index).decode('utf-8')
-        piece_path = os.path.join(self.piece_folder, f'{piece_info_hash}')
-        
         try:
+            # Unpack the request data
+            index, begin, length = struct.unpack('>III', payload)
+            piece_info_hash = self.torrent_info.get_piece_info_hash(index).decode('utf-8')
+            piece_path = os.path.join(self.piece_folder, f'{piece_info_hash}')
+
+            # Read the requested block from the piece file
             with open(piece_path, 'rb') as f:
                 f.seek(begin)
                 block_data = f.read(length)
-                block_length_prefix = struct.pack('>I', len(block_data) + 9)
-                piece_message = struct.pack('>BIII', 7, index, begin, len(block_data)) + block_data
-                socket.send(block_length_prefix + piece_message)
-                logging.info(f"Sent block {begin}-{begin + length} of piece {index} to peer.")
+
+            logging.info(f"Block hash info: {hashlib.sha1(block_data).hexdigest()}")
+
+            # Prepare the piece message
+            block_length_prefix = struct.pack('>I', len(block_data) + 9)
+            piece_message_id = struct.pack('B', 7)
+            piece_index = struct.pack('>I', index)
+            piece_begin = struct.pack('>I', begin)
+            piece_message = piece_message_id + piece_index + piece_begin + block_data
+
+            # Send the piece message to the peer
+            conn.sendall(block_length_prefix + piece_message)
+            logging.info(f"Sent block {begin}-{begin + length} of piece {index} to peer.")
+            logging.info(f"Message Size: {len(block_length_prefix + piece_message)}")
         except FileNotFoundError:
             logging.error(f"Piece {index} not found in {self.piece_folder}.")
+        except IOError as e:
+            logging.error(f"IOError reading piece {index} from disk: {e}")
+        except socket.error as e:
+            logging.error(f"Socket error sending piece {index} to peer: {e}")
+        except Exception as e:
+            logging.error(f"Unexpected error handling request for piece {index}: {e}")
 
     def start_global_periodic_tasks(self):
         """Khởi động các thread toàn cục."""

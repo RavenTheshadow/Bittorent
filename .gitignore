@@ -5,3 +5,4 @@ Test
 .env
 DownloadFolder/*
 Test.py
+venv
