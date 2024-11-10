@@ -29,7 +29,7 @@ class Downloader:
         try:
             piece_size = self.torrent_info.get_piece_sizes()[piece_index]
             
-            block_size = 2048
+            block_size = 1430
             return [(piece_index, offset, offset + min(block_size, piece_size - offset)) for offset in range(0, piece_size, block_size)]
         except Exception as e:
             print(f"Error downloading piece {piece_index}: {e}")
@@ -72,9 +72,11 @@ class Downloader:
     def _listen_thread(self, s: socket.socket, peer, message_queue: queue.Queue):
         try:
             while True:
-                message = s.recv(2048 + 30)
+                # TCP get max length of 1460 bytes
+                message = s.recv(1460)
                 if not message:
                     break
+                logging.info(f"Received message length: {len(message)}")
                 message_queue.put(message)
         except socket.error as e:
             logging.error(f"Error receiving message from {peer} - {e}")
@@ -206,7 +208,7 @@ class Downloader:
     def _connect_peer(self, peer):
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.settimeout(60)
+            s.settimeout(600)
             self.start_a_connection(peer, s)
             with self.lock:
                 self.peerConnection[peer] = s
@@ -228,7 +230,10 @@ class Downloader:
     def rarest_pieces_algorithm(self):
         while not self.is_having_all_pieces():
             rarest_piece = self.get_rarest_pieces()
+            if rarest_piece is None:
+                break
             torrent_info_hash = self.torrent_info.get_piece_info_hash(rarest_piece).decode('utf-8')
+
             request_blocks = self.download_piece(rarest_piece)
             selected_peers = random.sample(self.having_pieces_list[rarest_piece], min(5, len(self.having_pieces_list[rarest_piece])))
 
@@ -257,6 +262,7 @@ class Downloader:
                     self.contribution_rank[peer[0]] += (end - start) 
             else:
                 del self.pieces_data[rarest_piece]
+        logging.info("Download complete")
             
 
     def multi_download_manage(self):
