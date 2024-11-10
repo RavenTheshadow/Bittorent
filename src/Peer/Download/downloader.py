@@ -250,7 +250,7 @@ class Downloader:
 
     def rarest_pieces_algorithm(self):
         while not self.is_having_all_pieces():
-            time.sleep(0.5)
+            time.sleep(0.2)
             rarest_piece = self.get_rarest_pieces()
             torrent_info_hash = None
             if rarest_piece is None:
