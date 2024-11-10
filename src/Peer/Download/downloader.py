@@ -105,8 +105,9 @@ class Downloader:
         # elif message_id == 4:
         #     self._handle_have_message(payload, peer)
         elif message_id == 7:
-            logging.info(f"Len message: {len(message)}")
-            self._handle_piece_message(payload, peer)
+            self._handle_piece_message(payload)
+        elif message_id == 11:
+            self._handle_get_peers_list_message(payload)
 
     def _handle_choke_message(self, peer):
         with self.lock:
@@ -116,13 +117,24 @@ class Downloader:
         with self.lock:
             self.unchoke[peer] = True
 
+    def _handle_get_peers_list_message(self, payload):
+        try:
+            peer_list = payload.decode('utf-8')
+            for peer in peer_list:
+                with self.lock:
+                    if peer not in self.peerList:
+                        self.peerList.append(peer)
+                        self._connect_peer(peer)
+        except Exception as e:
+            logging.error(f"Error handling get peers list message: {e}")
+
     def _handle_have_message(self, payload, peer):
         piece_index = struct.unpack('>I', payload)[0]
         if self.bit_field[piece_index] == 0:
             with self.lock:
                 self.having_pieces_list[piece_index].append(peer)
 
-    def _handle_piece_message(self, payload, peer):
+    def _handle_piece_message(self, payload):
         index = struct.unpack('>I', payload[:4])[0]         # Index: 4 bytes
         begin = struct.unpack('>I', payload[4:8])[0]        # Begin: 4 bytes
         block_data = payload[8:]                            # Block data: Rest of the payload   
@@ -227,11 +239,25 @@ class Downloader:
         except Exception as e:
             logging.error(f"Error in _downloader_flow: {e}")
 
+    def _send_get_peer_list(self, peerList):
+        try:
+            send_message = SendMessageP2P()
+            for peer in peerList:
+                conn = self.peerConnection[peer]
+                send_message.send_get_peers_list_message(conn)
+        except Exception as e:
+            logging.error(f"Error in _send_get_peer_list: {e}")
+
     def rarest_pieces_algorithm(self):
         while not self.is_having_all_pieces():
             rarest_piece = self.get_rarest_pieces()
+
             if rarest_piece is None:
-                break
+                if not self.is_having_all_pieces():
+                    self._send_get_peer_list(self.peerList)
+                else:
+                    break
+
             torrent_info_hash = self.torrent_info.get_piece_info_hash(rarest_piece).decode('utf-8')
 
             request_blocks = self.download_piece(rarest_piece)

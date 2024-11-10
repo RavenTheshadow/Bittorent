@@ -53,3 +53,8 @@ class SendMessageP2P:
         begin = struct.pack('>I', begin)  # 4 bytes for begin offset
         length = struct.pack('>I', length)  # 4 bytes for length
         s.send(length_prefix + message_id + index + begin + length)
+
+    def send_get_peers_list_message(self, s: socket.socket):
+        length_prefix = struct.pack('>I', 1)
+        message_id = struct.pack('B', 10)
+        s.send(length_prefix + message_id)
