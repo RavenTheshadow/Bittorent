@@ -44,8 +44,9 @@ class FileStructure:
             
         elif not (info_hash_folder / 'bitfield').exists():
             for piece in (info_hash_folder / 'pieces').iterdir():
-                piece_index = self.torrent_info.get_piece_index(piece.name)
-                self.bitfield[piece_index] = 1
+                piece_info_hash = piece.name.encode('utf-8')
+                index = self.torrent_info.get_piece_index(piece_info_hash)
+                self.bitfield[index] = 1
             self.save_bitfield(info_hash_folder / 'bitfield')
 
         return info_hash_folder
@@ -64,6 +65,38 @@ class FileStructure:
             mp = json.load(f)
         return mp[self.info_hash]
     
+    def merge_pieces(self, torrent_info: TorrentInfo):
+
+        pieces_folder = Path(self.get_pieces_folder()).resolve()
+        
+        file_save_dir = self.download_dir / Path(self.info_hash)
+        files = torrent_info.files  # Metadata các file từ torrent
+
+        piece_index = 0
+
+        for file_info in files:
+            # Tạo đường dẫn file theo metadata
+            file_path = file_save_dir / Path(*file_info['path'])
+            # Tạo thư mục cha của file nếu chưa có
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+
+            with open(file_path, 'wb') as f:
+                remaining_length = file_info['length']
+    
+                while remaining_length > 0:
+                    piece_info_hash = torrent_info.get_piece_info_hash(piece_index).decode('utf-8')
+                    
+                    piece_path = pieces_folder / piece_info_hash
+
+                    with open(piece_path, 'rb') as piece_file:
+                        piece_data = piece_file.read()
+                        f.write(piece_data)
+                        remaining_length -= len(piece_data)
+                    piece_index += 1
+                    
+            print(f'{file_path} saved')
+
+
 if __name__ == "__main__":
     fs = FileStructure()
     print(fs.get_info_hash_folder())

@@ -250,7 +250,6 @@ class Downloader:
 
     def rarest_pieces_algorithm(self):
         while not self.is_having_all_pieces():
-            time.sleep(0.2)
             rarest_piece = self.get_rarest_pieces()
             torrent_info_hash = None
             if rarest_piece is None:
@@ -274,7 +273,11 @@ class Downloader:
                         self._send_block_request(s, peer, index, start, end)
                     except Exception as e:
                         logging.error(f"Error sending block request to peer {peer}: {e}")
-                self.barrier.wait()
+                try:
+                    self.barrier.wait(timeout=1)
+                except Exception as e:
+                    logging.error("Timeout waiting for block response")
+                    break
 
                 for peer in selected_peers:
                     logging.info(f"Get {rarest_piece} {start} {end} from {peer}")
@@ -316,15 +319,9 @@ class Downloader:
         for listener in listener_list:
             listener.join()
 
+        self.file_structure.merge_pieces(self.torrent_info)
             
             
 if __name__ == "__main__":
-    tester = Downloader(r'C:\Users\MyClone\OneDrive\Desktop\SharingFolder\hello.torrent', "127.119.128.1:6681")
-    for i in range(52):
-        tester.update_pieces(i, b"Hello", tester.torrent_info.get_piece_info_hash(i).decode('utf-8'))
-        
-    tester.having_pieces_list[0].append(("192.168.1.1", 6681))
-    tester.having_pieces_list[1].append(("191.129.12.1", 6682))
-    tester.having_pieces_list[1].append(("10.0.2.3", 8000))
-    tester.having_pieces_list[2].append(("10.0.2.3", 8000))
-    print(tester.get_rarest_pieces())
+    tester = Downloader(r'C:\Users\MyClone\OneDrive\Desktop\SharingFolder\hello.torrent', "127.119.128.1", [], None)
+    tester.file_structure.merge_pieces(tester.torrent_info)
