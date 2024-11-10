@@ -3,5 +3,6 @@ __pycache__
 Test
 .vscode
 .env
-DownloadFolder
+DownloadFolder/*
 Test.py
+venv

@@ -54,6 +54,7 @@ class FileStructure:
         with open(self.mapping_file_path, 'r') as f:
             mp = json.load(f)
         return mp[self.info_hash]
+    
 
 if __name__ == "__main__":
     fs = FileStructure()

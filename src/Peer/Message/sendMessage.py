@@ -11,12 +11,23 @@ class SendMessageP2P:
         s.send(pstrlen + pstr + reserved + info_hash + peer_id)
     
     def send_keep_alive_message(self, s: socket.socket):
-        time.sleep(30)
         s.send(struct.pack('>I', 0))
 
     def send_interested_message(self, s: socket.socket):
         length_prefix = struct.pack('>I', 1)
         message_id = struct.pack('B', 2)  # 2 for interested
+        s.send(length_prefix + message_id)
+
+    def send_choke_message(self, s: socket.socket):
+        """Send a choke message to the peer."""
+        length_prefix = struct.pack('>I', 1)
+        message_id = struct.pack('B', 0)  # 0 for choke
+        s.send(length_prefix + message_id)
+    
+    def send_unchoke_message(self, s: socket.socket):
+        """Send an unchoke message to the peer."""
+        length_prefix = struct.pack('>I', 1)
+        message_id = struct.pack('B', 1)  # 1 for unchoke
         s.send(length_prefix + message_id)
 
     def wait_for_unchoke_message(self, s: socket.socket):
