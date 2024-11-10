@@ -127,7 +127,7 @@ class Upload:
     def handle_interested(self, conn, peer):
         """Handles an interested message from a peer."""
         with self.lock:
-        # Check if the peer is in the unchoke list and send the appropriate message.
+            # Check if the peer is in the unchoke list and send the appropriate message.
             if peer in self.unchoke_list:
                 self.send_unchoke_message_conn(conn)
             else:
@@ -154,9 +154,6 @@ class Upload:
         except socket.error as e:
             logging.error(f"Error sending choke message: {e}")
 
-
-
-
     def update_choke_status(self):
         """Cập nhật danh sách unchoke dựa trên bảng xếp hạng đóng góp mỗi 10 giây."""
         while True:
@@ -165,9 +162,9 @@ class Upload:
                 # Sắp xếp và chọn top 5 peer
                 sorted_peers = sorted(self.contribution_rank.items(), key=lambda x: x[1], reverse=True)
                 self.unchoke_list = [peer for peer, _ in sorted_peers[:5]]
-                for peer in self.unchoke_list:
-                    self.send_unchoke_message(peer)
-                logging.info(f"Updated unchoke list: {self.unchoke_list}")
+            for peer in self.unchoke_list:
+                self.send_unchoke_message(peer)
+            logging.info(f"Updated unchoke list: {self.unchoke_list}")
 
     def random_unchoke_peer(self):
         """Ngẫu nhiên unchoke một peer ngoài top 5 mỗi 30 giây."""
@@ -175,13 +172,13 @@ class Upload:
             time.sleep(30)
             with self.lock:
                 peers_outside_top5 = [peer for peer in self.contribution_rank if peer not in self.unchoke_list]
-                
-                if peers_outside_top5:
-                    random_peer = random.choice(peers_outside_top5)
-                    if random_peer not in self.unchoke_list:
+            if peers_outside_top5:
+                random_peer = random.choice(peers_outside_top5)
+                if random_peer not in self.unchoke_list:
+                    with self.lock:
                         self.unchoke_list.append(random_peer)
-                        self.send_unchoke_message(random_peer)
-                        logging.info(f"Randomly unchoked peer: {random_peer}")
+                    self.send_unchoke_message(random_peer)
+                    logging.info(f"Randomly unchoked peer: {random_peer}")
 
     def send_unchoke_message(self, peer):
         """Gửi thông điệp unchoke đến một peer."""
