@@ -107,6 +107,10 @@ class Upload:
             piece_message = piece_message_id + piece_index + piece_begin + block_data
 
             # Send the piece message to the peer
+            
+            # Limit the upload speed to 1MB/s
+            time.sleep(len(block_data) / 1e6)
+
             conn.sendall(block_length_prefix + piece_message)
             logging.info(f"Sent block {begin}-{begin + length} of piece {index} to peer.")
             logging.info(f"Message Size: {len(block_length_prefix + piece_message)}")

@@ -1,11 +1,7 @@
 import socket
 import struct
-import hashlib
 import logging
-import queue
-import random
-from threading import Lock, Barrier, Event, Thread, Condition
-from Message.sendMessage import SendMessageP2P
+from threading import Lock, Thread
 from Download.downloader import Downloader
 from Upload.upload import Upload
 
