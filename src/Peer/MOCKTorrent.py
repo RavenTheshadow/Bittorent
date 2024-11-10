@@ -58,3 +58,4 @@ if __name__ == "__main__":
     print(f"Pieces: {torrent_info.pieces}")
     print(f"Get Piece Size: {torrent_info.get_piece_sizes()}")
     print(f"Get Piece info hash: {torrent_info.get_piece_info_hash(0)}")
+    print(f"Number of pieces: {torrent_info.get_number_of_pieces()}")

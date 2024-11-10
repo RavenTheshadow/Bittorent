@@ -14,7 +14,8 @@ class Downloader:
         self.pieces_length = self.torrent_info.get_number_of_pieces()
         self.having_pieces_list = defaultdict(list)
         self.our_peer_id = our_peer_id
-        self.file_structure = FileStructure("DownloadFolder", self.torrent_info.info_hash, self.pieces_length, "DownloadFolder/mapping_file.json")
+        self.file_structure = FileStructure("DownloadFolder", self.torrent_info.info_hash,
+                                             self.pieces_length, "DownloadFolder/mapping_file.json", torrent_info= self.torrent_info)
         self.download_dir = self.file_structure.get_info_hash_folder()
         self.bit_field = self.file_structure.get_bitfield_info(self.download_dir)
         self.lock = Lock()
@@ -76,7 +77,6 @@ class Downloader:
                 message = s.recv(1460)
                 if not message:
                     break
-                logging.info(f"Received message length: {len(message)}")
                 message_queue.put(message)
         except socket.error as e:
             logging.error(f"Error receiving message from {peer} - {e}")
@@ -234,7 +234,7 @@ class Downloader:
 
     def _downloader_flow(self, peer, s):
         try:        
-            message_queue = queue.Queue()
+            message_queue = queue.Queue(maxsize=10000)
             self.start_downloading_handling_thread(s, peer, message_queue)
         except Exception as e:
             logging.error(f"Error in _downloader_flow: {e}")
@@ -250,14 +250,16 @@ class Downloader:
 
     def rarest_pieces_algorithm(self):
         while not self.is_having_all_pieces():
+            time.sleep(0.5)
             rarest_piece = self.get_rarest_pieces()
-
+            torrent_info_hash = None
             if rarest_piece is None:
                 if not self.is_having_all_pieces():
+                    logging.info(f"Bitfield: {self.bit_field}")
                     self._send_get_peer_list(self.peerList)
                 else:
                     break
-
+            
             torrent_info_hash = self.torrent_info.get_piece_info_hash(rarest_piece).decode('utf-8')
 
             request_blocks = self.download_piece(rarest_piece)

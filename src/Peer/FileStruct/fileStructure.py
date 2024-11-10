@@ -1,13 +1,16 @@
 import json
+from MOCKTorrent import TorrentInfo
 from pathlib import Path
 
 class FileStructure:
-    def __init__(self, download_dir="DownloadFolder", info_hash="info_hash_02", pieces_length=10, mapping_file_path="DownloadFolder/mapping_file.json"):
+    def __init__(self, download_dir="DownloadFolder", info_hash="info_hash_02",
+                  pieces_length=10, mapping_file_path="DownloadFolder/mapping_file.json", torrent_info=None):
         self.download_dir = Path(download_dir)
         self.info_hash = info_hash
         self.pieces_length = pieces_length
         self.mapping_file_path = Path(mapping_file_path)
         self.bitfield = [0] * self.pieces_length
+        self.torrent_info = torrent_info
 
     def save_bitfield(self, bitfield_path):
         with open(bitfield_path, 'wb') as f:
@@ -38,6 +41,13 @@ class FileStructure:
             self.save_bitfield(info_hash_folder / 'bitfield')
             (info_hash_folder / 'pieces').mkdir()
             self.update_mapping_file()
+            
+        elif not (info_hash_folder / 'bitfield').exists():
+            self.save_bitfield(info_hash_folder / 'bitfield')
+            for piece in (info_hash_folder / 'pieces').iterdir():
+                piece_index = self.torrent_info.get_piece_index(piece.name)
+                self.bitfield[piece_index] = 1
+            self.save_bitfield(info_hash_folder / 'bitfield')
 
         return info_hash_folder
 
