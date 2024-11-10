@@ -4,7 +4,7 @@ from pathlib import Path
 
 class FileStructure:
     def __init__(self, download_dir="DownloadFolder", info_hash="info_hash_02",
-                  pieces_length=10, mapping_file_path="DownloadFolder/mapping_file.json", torrent_info=None):
+                  pieces_length=10, mapping_file_path="DownloadFolder/mapping_file.json", torrent_info:TorrentInfo = None):
         self.download_dir = Path(download_dir)
         self.info_hash = info_hash
         self.pieces_length = pieces_length
@@ -43,10 +43,10 @@ class FileStructure:
             self.update_mapping_file()
             
         elif not (info_hash_folder / 'bitfield').exists():
-            self.save_bitfield(info_hash_folder / 'bitfield')
             for piece in (info_hash_folder / 'pieces').iterdir():
-                piece_index = self.torrent_info.get_piece_index(piece.name)
-                self.bitfield[piece_index] = 1
+                index = self.torrent_info.get_piece_index(piece.name.encode('utf-8'))
+                self.bitfield[index] = 1
+                #self.bitfield[piece_index] = 1
             self.save_bitfield(info_hash_folder / 'bitfield')
 
         return info_hash_folder
