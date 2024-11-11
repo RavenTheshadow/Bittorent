@@ -6,10 +6,9 @@ from MOCKTorrent import TorrentInfo
 from FileStruct.fileStructure import FileStructure
 from Message.sendMessage import SendMessageP2P
 from threading import Lock, Thread, Barrier
-
 logging.basicConfig(level=logging.INFO)
 class Downloader:
-    def __init__(self, torrent_file_path, our_peer_id, peerList, contribution_rank):
+    def __init__(self, torrent_file_path, our_peer_id, peerList, uploader, number_of_bytes_downloaded=0):
         self.torrent_info = TorrentInfo(torrent_file_path)
         self.pieces_length = self.torrent_info.get_number_of_pieces()
         self.having_pieces_list = defaultdict(list)
@@ -21,10 +20,11 @@ class Downloader:
         self.lock = Lock()
         self.peerList = peerList
         self.unchoke = {peer: False for peer in peerList}
-        self.contribution_rank = contribution_rank
         self.pieces_data = {}
         self.peerConnection = {}
         self.barrier = None
+        self.uploader = uploader
+        self.number_of_bytes_downloaded = number_of_bytes_downloaded
 
     def download_piece(self, piece_index):
         try:
@@ -102,8 +102,8 @@ class Downloader:
             self._handle_choke_message(peer)
         elif message_id == 1:
             self._handle_unchoke_message(peer)
-        # elif message_id == 4:
-        #     self._handle_have_message(payload, peer)
+        elif message_id == 4:
+            self._handle_have_message(payload, peer)
         elif message_id == 7:
             self._handle_piece_message(payload)
         elif message_id == 11:
@@ -224,8 +224,8 @@ class Downloader:
             self.start_a_connection(peer, s)
             with self.lock:
                 self.peerConnection[peer] = s
-                if peer[0] not in self.contribution_rank:
-                    self.contribution_rank[peer[0]] = 0
+                if peer[0] not in self.uploader.contribution_rank:
+                    self.uploader.contribution_rank[peer[0]] = 0
         except Exception as e:
             logging.error(f"Error in _connect_peer: {e}")
             if peer in self.peerConnection:
@@ -254,43 +254,56 @@ class Downloader:
             torrent_info_hash = None
             if rarest_piece is None:
                 if not self.is_having_all_pieces():
-                    logging.info(f"Bitfield: {self.bit_field}")
                     self._send_get_peer_list(self.peerList)
+                    break
                 else:
                     break
-            
+            if torrent_info_hash is None:
+                logging.info(f"Downloading piece {rarest_piece}")
             torrent_info_hash = self.torrent_info.get_piece_info_hash(rarest_piece).decode('utf-8')
 
             request_blocks = self.download_piece(rarest_piece)
             selected_peers = random.sample(self.having_pieces_list[rarest_piece], min(5, len(self.having_pieces_list[rarest_piece])))
 
             self.barrier = Barrier(len(selected_peers) + 1)
-            for block in request_blocks:
-                for peer in selected_peers:
-                    try:
+            try:
+
+                for block in request_blocks:
+                    for peer in selected_peers:
                         index, start, end = block
                         s = self.peerConnection[peer]
                         self._send_block_request(s, peer, index, start, end)
-                    except Exception as e:
-                        logging.error(f"Error sending block request to peer {peer}: {e}")
-                try:
+
+                        #logging.error(f"Error sending block request to peer {peer}: {e}")
                     self.barrier.wait(timeout=1)
-                except Exception as e:
-                    logging.error("Timeout waiting for block response")
-                    break
 
                 for peer in selected_peers:
                     logging.info(f"Get {rarest_piece} {start} {end} from {peer}")
                     logging.info(f"Block hash: {hashlib.sha1(self.pieces_data[rarest_piece][start:end]).hexdigest()}")
+            except Exception as e:
+                    if self.pieces_data is not None and self.pieces_data[rarest_piece] is not None:
+                        del self.pieces_data[rarest_piece]
+                             
+                    logging.error("Timeout waiting for block response")
+                    break
+
+            
             
             custom = hashlib.sha1(self.pieces_data[rarest_piece]).hexdigest()
+
             if torrent_info_hash == custom:
                 self.update_pieces(rarest_piece, self.pieces_data[rarest_piece], custom)
                     
                 for i, block in enumerate(request_blocks):
                     peer = selected_peers[i % len(selected_peers)]
                     index, start, end = block
-                    self.contribution_rank[peer[0]] += (end - start) 
+                    self.uploader.contribution_rank[peer[0]] += end - start
+                    self.number_of_bytes_downloaded += end - start
+
+                # Handle having piece message
+                for conn in self.uploader.peer_sockets:
+                    send_message = SendMessageP2P()
+                    send_message.send_have_message(conn, rarest_piece)
             else:
                 del self.pieces_data[rarest_piece]
         logging.info("Download complete")

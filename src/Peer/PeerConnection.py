@@ -8,7 +8,7 @@ from Upload.upload import Upload
 logging.basicConfig(level=logging.INFO)
 
 class P2PConnection:
-    def __init__(self, torrent_file_path, our_peer_id="192.168.56.1", peerList=[]):
+    def __init__(self, torrent_file_path, our_peer_id="192.168.56.1", peerList=[], port= 9000):
         self.lock = Lock()
         self.our_peer_id = our_peer_id
         self.peerList = peerList
@@ -17,17 +17,20 @@ class P2PConnection:
         self.our_peer_id = our_peer_id
     
         self.isEnoughPiece = False
+        self.number_of_bytes_downloaded = 0
         self.uploader = Upload(torrent_file_path,r'DownloadFolder/mapping_file.json',our_peer_id)
-        self.downloader = Downloader(self.torrent_file_path, self.our_peer_id, self.peerList, self.uploader.contribution_rank)
-        
+        self.downloader = Downloader(self.torrent_file_path, self.our_peer_id, self.peerList, self.uploader, self.number_of_bytes_downloaded)
+        self.port = port
+
     # Phần này lâm viết 
 
     def start_downloading(self):
         self.downloader.multi_download_manage()
 
-    def listen_for_peers(self, listen_port):
+    def listen_for_peers(self):
         """Continuously listens for incoming peer connections."""
         try:
+            listen_port = self.port
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
                 server_socket.bind(('', listen_port))
                 server_socket.listen(5)
@@ -51,15 +54,15 @@ class P2PConnection:
         finally:
             conn.close()
 
-
 if __name__ == "__main__":
     # my_IP = get_my_IP()
     # print(my_IP)
 
-    our_Peer_ID = "10.0.239.28"
+    our_Peer_ID = "10.229.197.210"
 
-    peerList = [("10.0.235.204", 6000)]
+    peerList = [("10.229.197.223", 6000)]
     peer = P2PConnection(r'C:\Users\MyClone\OneDrive\Desktop\SharingFolder\hello.torrent',
                           our_Peer_ID, peerList)
     
     peer.start_downloading()
+    print(f"{peer.downloader.number_of_bytes_downloaded} bytes downloaded")

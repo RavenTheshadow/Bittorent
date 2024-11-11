@@ -46,7 +46,8 @@ class Upload:
                 logging.error(f"No piece folder found for info_hash: {info_hash}")
                 return None
         except (FileNotFoundError, json.JSONDecodeError) as e:
-            logging.error(f"Error reading mapping file: {e}")
+            # Create a new mapping file if it doesn't exist
+            os.makedirs(os.path.dirname(mapping_file_path), exist_ok=True)
             return None
 
     def send_bitfield(self, conn):
