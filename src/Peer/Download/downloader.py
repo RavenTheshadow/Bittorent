@@ -5,10 +5,11 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 from MOCKTorrent import TorrentInfo
 from FileStruct.fileStructure import FileStructure
 from Message.sendMessage import SendMessageP2P
-from threading import Lock, Thread, Barrier
+from threading import Lock, Thread, Condition
+from Upload.upload import Upload
 logging.basicConfig(level=logging.INFO)
 class Downloader:
-    def __init__(self, torrent_file_path, our_peer_id, peerList, uploader, number_of_bytes_downloaded=0):
+    def __init__(self, torrent_file_path, our_peer_id, peerList, uploader: Upload, number_of_bytes_downloaded=0):
         self.torrent_info = TorrentInfo(torrent_file_path)
         self.pieces_length = self.torrent_info.get_number_of_pieces()
         self.having_pieces_list = defaultdict(list)
@@ -17,14 +18,19 @@ class Downloader:
                                              self.pieces_length, "DownloadFolder/mapping_file.json", torrent_info= self.torrent_info)
         self.download_dir = self.file_structure.get_info_hash_folder()
         self.bit_field = self.file_structure.get_bitfield_info(self.download_dir)
+
         self.lock = Lock()
         self.peerList = peerList
         self.unchoke = {peer: False for peer in peerList}
         self.pieces_data = {}
         self.peerConnection = {}
-        self.barrier = None
+
         self.uploader = uploader
         self.number_of_bytes_downloaded = number_of_bytes_downloaded
+
+        ### Get data treatment
+        self.condition = Condition()
+        self.dataQueue = queue.Queue()
 
     def download_piece(self, piece_index):
         try:
@@ -66,7 +72,7 @@ class Downloader:
         except (socket.timeout, socket.error) as e:
             logging.error(f"")
             if peer in self.peerList:
-                self.peerList.remove()
+                self.peerList.remove(peer)
             listen_thread.join()
             processor_thread.join()
 
@@ -138,21 +144,17 @@ class Downloader:
         index = struct.unpack('>I', payload[:4])[0]         # Index: 4 bytes
         begin = struct.unpack('>I', payload[4:8])[0]        # Begin: 4 bytes
         block_data = payload[8:]                            # Block data: Rest of the payload   
-        logging.info(f"Size of block_data: {len(block_data)}")
-    
+        
         piece_sizes = self.torrent_info.get_piece_sizes()
-        logging.info(f"Received piece index: {index}, Total pieces: {len(piece_sizes)}")
     
         if index >= len(piece_sizes):
             logging.error(f"Invalid piece index: {index}")
             return
     
         with self.lock:
-            if index not in self.pieces_data:
-                piece_size = piece_sizes[index]
-                self.pieces_data[index] = bytearray(piece_size)
-            self.pieces_data[index][begin:begin + len(block_data)] = block_data
-        self.barrier.wait()
+            self.dataQueue.put((index, begin, block_data))
+            with self.condition:
+                self.condition.notify_all()
 
     def start_a_connection(self, peer, s: socket.socket):
         try:
@@ -196,38 +198,60 @@ class Downloader:
 
             logging.info(f"Received bitfield from {peer[0]}:{peer[1]}")      
         except (socket.timeout, socket.error) as e:
-            logging.error(f"Failed to connect to {peer_ip}:{peer_port} - {e}")
             if peer in self.peerList:
                 self.peerList.remove(peer)
+                self.unchoke.pop(peer, None)
+
+    def send_request(self, s: socket, peer,  index, start, end):
+        send_message = SendMessageP2P()
+        
+        # index, start, end = self.peer_block_requests[peer].pop(0)
+        send_message.send_interested_message(s)
+            
+        ### Wait for unchoke message
+        while not self.unchoke[peer]:
+            time.sleep(0.25)  # Add a small sleep to avoid busy waiting
+        ## Wait for unchoke message
+        send_message.send_request_message(index, start, end - start, s)
 
     def _send_block_request(self, s, peer, index, start, end):
-        try:                
-            send_message = SendMessageP2P()
-        
-            # index, start, end = self.peer_block_requests[peer].pop(0)
-            send_message.send_interested_message(s)
-            
-            ### Wait for unchoke message
-            while not self.unchoke[peer]:
-                time.sleep(1)  # Add a small sleep to avoid busy waiting
-            ## Wait for unchoke message
-            send_message.send_request_message(index, start, end - start, s)
+        MAX_RETRIED     = 3
+        retried_count   = 0
+        retried_delay   = 2
+        while retried_count < MAX_RETRIED:
+            try:                
+                self.send_request(s, peer, index, start, end)
+                break
+            except socket.timeout as e:
+                logging.error(f"Socket is time out, trying to reconnection...")
+                retried_count += 1
+                time.sleep(retried_delay)
+                continue
+            except IndexError as e:
+                raise IndexError("Not valid index")
+            except socket.error as e:
+                self.peerList.remove(peer)
 
-        except (socket.timeout, socket.error, IndexError) as e:
-            logging.error(f"Error: {e}")
-            pass
-
+                for piece in self.having_pieces_list:
+                    if peer in piece:
+                        piece.remove(peer)
+                self.unchoke.pop(peer)
+        if retried_count == MAX_RETRIED:
+            raise TimeoutError(f"Cannot reconnection after tried {MAX_RETRIED}")
+    
     def _connect_peer(self, peer):
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.settimeout(600)
             self.start_a_connection(peer, s)
             with self.lock:
-                self.peerConnection[peer] = s
-                if peer[0] not in self.uploader.contribution_rank:
-                    self.uploader.contribution_rank[peer[0]] = 0
+                if not s.getpeername():
+                    return None
+                else:
+                    self.peerConnection[peer] = s
+                    if peer[0] not in self.uploader.contribution_rank:
+                        self.uploader.contribution_rank[peer[0]] = 0
         except Exception as e:
-            logging.error(f"Error in _connect_peer: {e}")
             if peer in self.peerConnection:
                 del self.peerConnection[peer]
             return None
@@ -248,65 +272,102 @@ class Downloader:
         except Exception as e:
             logging.error(f"Error in _send_get_peer_list: {e}")
 
-    def rarest_pieces_algorithm(self):
+    
+    def _broadcast_have_message(self, piece_index):
+        try:
+            send_message = SendMessageP2P()
+            for conn in self.uploader.peer_sockets:
+                send_message.send_have_message(conn, piece_index)
+        except Exception as e:
+            logging.error(f"Error in _broadcast_have_message: {e}")
+
+    def _handle_block(self, index, start, block_data, request_blocks, selected_peers):
+        with self.lock:
+                
+            if index not in self.pieces_data:
+                self.pieces_data[index] = []
+
+            self.pieces_data[index][start:start + len(block_data)] = block_data
+
+            piece_size = self.torrent_info.get_piece_sizes()[index]
+
+            if len(self.pieces_data[index]) == piece_size:
+                        
+                torrent_info_hash = self.torrent_info.get_piece_info_hash(index).decode('utf-8')
+                self.pieces_data[index] = bytes(self.pieces_data[index])
+                custom = hashlib.sha1(self.pieces_data[index]).hexdigest()
+
+                if torrent_info_hash == custom:
+                    self.update_pieces(index, self.pieces_data[index], custom)
+                    
+                    for i, block in enumerate(request_blocks):
+                        peer = selected_peers[i % len(selected_peers)]
+                        index, start, end = block
+                        self.uploader.contribution_rank[peer[0]] += end - start
+                        self.number_of_bytes_downloaded += end - start
+
+                    logging.info(f"Get piece: {index} hashValue: {torrent_info_hash}")
+
+                    self._broadcast_have_message(index)
+                else:
+                    self.pieces_data.pop(index)
+
+                self.dataQueue.put(None)
+
+    def request_blocks_from_peers(self, request_blocks, selected_peers):
+        try:
+            for i, block in enumerate(request_blocks):
+                index, start, end = block
+                peer_request_block = selected_peers[i % len(selected_peers)]
+                s = self.peerConnection[peer_request_block]
+                self._send_block_request(s, peer_request_block, index, start, end)
+                time.sleep(0.1)
+        except Exception as e:
+            logging.error(f"Error in request_blocks_from_peers: {e}")
+
+    def process_downloaded_blocks(self, request_blocks, selected_peers):
+        while True:
+            with self.condition:
+                while self.dataQueue.empty():
+                    if not self.condition.wait(timeout=10):
+                        raise TimeoutError(f"Timeout while waiting for data in dataQueue")
+
+                block = self.dataQueue.get()
+                if block is None:
+                    break
+
+                index, start, block_data = block
+                self._handle_block(index, start, block_data, request_blocks, selected_peers)
+
+    def download_rarest_piece(self):
+        MAX_RETRIED     = 3
+        retried_count   = 0
+        retried_delay   = 2
+
         while not self.is_having_all_pieces():
             rarest_piece = self.get_rarest_pieces()
-            torrent_info_hash = None
+
             if rarest_piece is None:
-                if not self.is_having_all_pieces():
-                    self._send_get_peer_list(self.peerList)
-                    break
-                else:
-                    break
-            if torrent_info_hash is None:
-                logging.info(f"Downloading piece {rarest_piece}")
-            torrent_info_hash = self.torrent_info.get_piece_info_hash(rarest_piece).decode('utf-8')
+                break
 
             request_blocks = self.download_piece(rarest_piece)
             selected_peers = random.sample(self.having_pieces_list[rarest_piece], min(5, len(self.having_pieces_list[rarest_piece])))
 
-            self.barrier = Barrier(len(selected_peers) + 1)
-            try:
-
-                for block in request_blocks:
-                    for peer in selected_peers:
-                        index, start, end = block
-                        s = self.peerConnection[peer]
-                        self._send_block_request(s, peer, index, start, end)
-
-                        #logging.error(f"Error sending block request to peer {peer}: {e}")
-                    self.barrier.wait(timeout=1)
-
-                for peer in selected_peers:
-                    logging.info(f"Get {rarest_piece} {start} {end} from {peer}")
-                    logging.info(f"Block hash: {hashlib.sha1(self.pieces_data[rarest_piece][start:end]).hexdigest()}")
-            except Exception as e:
-                    if self.pieces_data is not None and self.pieces_data[rarest_piece] is not None:
-                        del self.pieces_data[rarest_piece]
-                             
-                    logging.error("Timeout waiting for block response")
+            while retried_count < MAX_RETRIED:
+                try:
+                    self.request_blocks_from_peers(request_blocks, selected_peers)
+                    self.process_downloaded_blocks(request_blocks, selected_peers)
+                    retried_count = 0
                     break
-
+                except TimeoutError as e:
+                    retried_count += 1
+                    time.sleep(retried_delay)
+                    continue
             
-            
-            custom = hashlib.sha1(self.pieces_data[rarest_piece]).hexdigest()
+            if retried_count == MAX_RETRIED:
+                raise ConnectionError(f"Failed to processing after retried... {MAX_RETRIED}")
 
-            if torrent_info_hash == custom:
-                self.update_pieces(rarest_piece, self.pieces_data[rarest_piece], custom)
-                    
-                for i, block in enumerate(request_blocks):
-                    peer = selected_peers[i % len(selected_peers)]
-                    index, start, end = block
-                    self.uploader.contribution_rank[peer[0]] += end - start
-                    self.number_of_bytes_downloaded += end - start
-
-                # Handle having piece message
-                for conn in self.uploader.peer_sockets:
-                    send_message = SendMessageP2P()
-                    send_message.send_have_message(conn, rarest_piece)
-            else:
-                del self.pieces_data[rarest_piece]
-        logging.info("Download complete")
+        logging.info("Download processing completed")
             
 
     def multi_download_manage(self):
@@ -326,8 +387,10 @@ class Downloader:
             listener = Thread(target=self._downloader_flow, args=(peer, conn))
             listener_list.append(listener)
             listener.start()
-
-        self.rarest_pieces_algorithm()
+        try:
+            self.download_rarest_piece()
+        except ConnectionError as e:
+            logging.error(f"{e}")
 
         for listener in listener_list:
             listener.join()

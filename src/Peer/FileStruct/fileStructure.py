@@ -51,6 +51,8 @@ class FileStructure:
             else:
                 (info_hash_folder / 'pieces').mkdir()
             self.save_bitfield(info_hash_folder / 'bitfield')
+        else:
+            self.bitfield = self.get_bitfield_info(info_hash_folder)
 
         return info_hash_folder
 
