@@ -1,6 +1,12 @@
 import struct, socket, time
 
 class SendMessageP2P:
+
+    def send_have_message(self, s: socket.socket, piece_index):
+        length_prefix = struct.pack('>I', 5)  # 4 bytes for length prefix
+        message_id = struct.pack('B', 4)  # 1 byte for message ID (4 for have)
+        piece_index = struct.pack('>I', piece_index)  # 4 bytes for piece index
+        s.send(length_prefix + message_id + piece_index)
         
     def send_handshake_message(self, s: socket.socket, info_hash: str, peer_id: str):
         pstrlen = struct.pack('B', 19)
@@ -53,3 +59,8 @@ class SendMessageP2P:
         begin = struct.pack('>I', begin)  # 4 bytes for begin offset
         length = struct.pack('>I', length)  # 4 bytes for length
         s.send(length_prefix + message_id + index + begin + length)
+
+    def send_get_peers_list_message(self, s: socket.socket):
+        length_prefix = struct.pack('>I', 1)
+        message_id = struct.pack('B', 10)
+        s.send(length_prefix + message_id)

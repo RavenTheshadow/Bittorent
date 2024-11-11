@@ -37,7 +37,7 @@ class TorrentInfo:
         return piece_sizes
     
     def get_piece_info_hash(self, piece_index):
-        if piece_index == None:
+        if piece_index is None:
             return None
         else:
             start = piece_index * 40
@@ -46,10 +46,13 @@ class TorrentInfo:
 
     def get_number_of_pieces(self):
         return len(self.pieces) // 40
+    
+    def get_piece_index(self, piece_info_hash):
+        return self.pieces.index(piece_info_hash) // 20
 
 if __name__ == "__main__":
     # Example usage
-    torrent_info = TorrentInfo(r'C:\Users\MyClone\OneDrive\Desktop\SharingFolder\hello.torrent')
+    torrent_info = TorrentInfo(r'C:\Users\User\Desktop\Năm 3\HK1\Computer Network\Asignment1\Bittorent\hello.torrent')
     print(f"Info Hash: {torrent_info.info_hash}")
     print(f"Piece Length: {torrent_info.piece_length}")
     print(f"Name: {torrent_info.name}")
@@ -58,3 +61,5 @@ if __name__ == "__main__":
     print(f"Pieces: {torrent_info.pieces}")
     print(f"Get Piece Size: {torrent_info.get_piece_sizes()}")
     print(f"Get Piece info hash: {torrent_info.get_piece_info_hash(0)}")
+    print(f"Number of pieces: {torrent_info.get_number_of_pieces()}")
+    print(f"Get Piece Index: {torrent_info.get_piece_index(torrent_info.pieces[20:40])}")
