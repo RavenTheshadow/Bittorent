@@ -179,12 +179,10 @@ class Downloader:
             s.connect((peer_ip, peer_port))
                 
             send_message = SendMessageP2P()
-            send_message.send_handshake_message(s, self.torrent_info.info_hash, self.our_peer_id, self.listen_port)
+            send_message.send_handshake_message(s, self.torrent_info.info_hash, self.our_peer_id)
 
             handshake_response = s.recv(88)
-            handshake_response = handshake_response.decode('utf-8')
-
-            if handshake_response[28:68] != self.torrent_info.info_hash:
+            if handshake_response[28:68].decode('utf-8') != self.torrent_info.info_hash:
                 return
 
             logging.info(f"Handshake successful with {peer_ip}:{peer_port}")
