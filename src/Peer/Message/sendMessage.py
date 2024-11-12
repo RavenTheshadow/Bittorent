@@ -64,3 +64,9 @@ class SendMessageP2P:
         length_prefix = struct.pack('>I', 1)
         message_id = struct.pack('B', 10)
         s.send(length_prefix + message_id)
+
+    def send_server_information(self, s: socket.socket, listen_port):
+        length_prefix = struct.pack('>I', 3)
+        message_id = struct.pack('B', 9)
+        port = struct.pack('>H', listen_port)
+        s.send(length_prefix + message_id + port)

@@ -9,11 +9,12 @@ from threading import Lock, Thread, Condition
 from Upload.upload import Upload
 logging.basicConfig(level=logging.INFO)
 class Downloader:
-    def __init__(self, torrent_file_path, our_peer_id, peerList, uploader: Upload, number_of_bytes_downloaded=0):
+    def __init__(self, torrent_file_path, our_peer_id, peerList, uploader: Upload, number_of_bytes_downloaded=0, listen_port= 9000):
         self.torrent_info = TorrentInfo(torrent_file_path)
         self.pieces_length = self.torrent_info.get_number_of_pieces()
         self.having_pieces_list = defaultdict(list)
         self.our_peer_id = our_peer_id
+
         self.file_structure = FileStructure("DownloadFolder", self.torrent_info.info_hash,
                                              self.pieces_length, "DownloadFolder/mapping_file.json", torrent_info= self.torrent_info)
         self.download_dir = self.file_structure.get_info_hash_folder()
@@ -27,7 +28,8 @@ class Downloader:
 
         self.uploader = uploader
         self.number_of_bytes_downloaded = number_of_bytes_downloaded
-
+        self.task_done = False
+        self.listen_port = listen_port
         ### Get data treatment
         self.condition = Condition()
         self.dataQueue = queue.Queue()
@@ -43,12 +45,17 @@ class Downloader:
             return None
 
     def get_rarest_pieces(self):
-        rarest_pieces = None
+        rarest_piece = None
+        min_peers_count = float('inf')
+
         for piece_index, peers in self.having_pieces_list.items():
             if self.bit_field[piece_index] == 0:
-                if rarest_pieces is None or len(peers) < len(self.having_pieces_list[rarest_pieces]):
-                    rarest_pieces = piece_index
-        return rarest_pieces
+                peers_count = len(peers)
+                if peers_count < min_peers_count:
+                    min_peers_count = peers_count
+                    rarest_piece = piece_index
+
+        return rarest_piece
     
     def update_pieces(self, index, piece, info_hash):
         self.bit_field[index] = 1
@@ -114,6 +121,16 @@ class Downloader:
             self._handle_piece_message(payload)
         elif message_id == 11:
             self._handle_get_peers_list_message(payload)
+        elif message_id == 13:
+            self._handle_send_sever_information(peer)
+
+    def _handle_send_sever_information(self, peer):
+        try:
+            send_message = SendMessageP2P()
+            conn = self.peerConnection[peer]
+            send_message.send_server_information(conn, self.our_peer_id, self.listen_port)
+        except Exception as e:
+            pass
 
     def _handle_choke_message(self, peer):
         with self.lock:
@@ -162,7 +179,7 @@ class Downloader:
             s.connect((peer_ip, peer_port))
                 
             send_message = SendMessageP2P()
-            send_message.send_handshake_message(s, self.torrent_info.info_hash, self.our_peer_id)
+            send_message.send_handshake_message(s, self.torrent_info.info_hash, self.our_peer_id, self.listen_port)
 
             handshake_response = s.recv(88)
             handshake_response = handshake_response.decode('utf-8')
@@ -329,7 +346,7 @@ class Downloader:
         while True:
             with self.condition:
                 while self.dataQueue.empty():
-                    if not self.condition.wait(timeout=10):
+                    if not self.condition.wait(timeout=5):
                         raise TimeoutError(f"Timeout while waiting for data in dataQueue")
 
                 block = self.dataQueue.get()
@@ -342,7 +359,7 @@ class Downloader:
     def download_rarest_piece(self):
         MAX_RETRIED     = 3
         retried_count   = 0
-        retried_delay   = 2
+        retried_delay   = 1
 
         while not self.is_having_all_pieces():
             rarest_piece = self.get_rarest_pieces()
@@ -366,6 +383,8 @@ class Downloader:
             
             if retried_count == MAX_RETRIED:
                 raise ConnectionError(f"Failed to processing after retried... {MAX_RETRIED}")
+            else:
+                retried_count = 0
 
         logging.info("Download processing completed")
             
@@ -396,7 +415,7 @@ class Downloader:
             listener.join()
 
         self.file_structure.merge_pieces(self.torrent_info)
-            
+        self.task_done = True            
             
 if __name__ == "__main__":
     tester = Downloader(r'C:\Users\MyClone\OneDrive\Desktop\SharingFolder\hello.torrent', "127.119.128.1", [], None)

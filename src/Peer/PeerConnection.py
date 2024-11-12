@@ -20,6 +20,7 @@ class P2PConnection:
         self.number_of_bytes_downloaded = 0
         self.uploader = Upload(torrent_file_path,r'DownloadFolder/mapping_file.json',our_peer_id)
         self.downloader = Downloader(self.torrent_file_path, self.our_peer_id, self.peerList, self.uploader, self.number_of_bytes_downloaded)
+        self.uploader._set_downloader(self.downloader)
         self.port = port
 
     # Phần này lâm viết 
@@ -60,18 +61,18 @@ if __name__ == "__main__":
 
     our_Peer_ID = "10.0.239.28"
 
-    peerList = [("10.0.224.249", 6000)]
+    peerList = []
     peer = P2PConnection(r'C:\Users\MyClone\OneDrive\Desktop\SharingFolder\hello.torrent',
-                          our_Peer_ID, peerList, 5678)
+                          our_Peer_ID, peerList, 2933)
     
-    # thread2 = Thread(target=peer.listen_for_peers, daemon=True)
-    # thread2.start()
+    thread2 = Thread(target=peer.listen_for_peers, daemon=True)
+    thread2.start()
 
     thread1 = Thread(target=peer.start_downloading, daemon=True)
     thread1.start()
 
 
     thread1.join()
-    # thread2.join()
+    thread2.join()
 
     print(f"{peer.downloader.number_of_bytes_downloaded} bytes downloaded")

@@ -26,9 +26,13 @@ class Upload:
         self.peer_sockets = {}       # Lưu socket của mỗi peer
         self.lock = threading.Lock()
         self.msg_sender = SendMessageP2P()
+        self.downloader = None
         
         # Khởi chạy các thread định kỳ
         self.start_global_periodic_tasks()
+
+    def _set_downloader(self, downloader):
+        self.downloader = downloader
 
     def _get_piece_folder(self, mapping_file_path):
         """Retrieve the piece folder path based on the info_hash from the mapping file."""
@@ -202,6 +206,20 @@ class Upload:
         if peer not in self.contribution_rank:
             self.contribution_rank[peer] = 0
 
+    def request_listen_port(self, conn):
+        if not self.downloader.task_done:
+            conn.sendall(struct.pack('>I', 1) + struct.pack('B', 13))
+            response = conn.recv(9)
+            length_prefix = struct.unpack('>I', response[:4])[0]
+            if len(response[4:]) != length_prefix:
+                raise Exception("Invalid response length")
+            message_id = struct.unpack('B', response[4:5])[0]
+
+            if message_id != 9:
+                raise Exception(f"Expected message ID 9, received {message_id}")
+            port = struct.unpack('>H', response[5:7])[0]
+            return port
+
     def upload_flow(self, conn):
         """Thực hiện các bước để upload cho một kết nối `peer`."""
         try:
@@ -232,6 +250,15 @@ class Upload:
                 self.peer_sockets[received_peer_ip] = conn
                 self.update_contribution_rank(received_peer_ip)
 
+            # Kiểm tra xem nếu quá trình download đã kết thúc hay chưa nếu chưa yêu cầu kết nối tới sever upload?
+
+            while True:
+                try:
+                    self.request_listen_port(conn)
+                    break
+                except Exception as e:
+                    continue    
+
             # 5. Xử lý yêu cầu từ peer
             while True:
                 request_data = conn.recv(1024)
@@ -243,6 +270,10 @@ class Upload:
                 length_prefix = struct.unpack('>I', request_data[:4])[0]    # Giải mã length_prefix
                 message_id = struct.unpack('B', request_data[4:5])[0]       # Giải mã message_id
                 payload = request_data[5:]                                  # Payload
+
+                if len(payload) != length_prefix - 1:
+                    continue
+
                 if message_id == 2:  # interested message
                     self.handle_interested(conn, received_peer_ip)
                 
