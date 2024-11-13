@@ -255,7 +255,7 @@ class Upload:
             while True:
                 try:
                     port = self.request_listen_port(conn)
-                    self.downloader.update_peer_list(received_peer_ip, port)
+                    self.downloader.update_peer_list((received_peer_ip, port))
                     break
                 except Exception as e:
                     continue    
