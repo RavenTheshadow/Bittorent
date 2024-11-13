@@ -291,7 +291,7 @@ class Downloader:
     def _broadcast_have_message(self, piece_index):
         try:
             send_message = SendMessageP2P()
-            for conn in self.uploader.peer_sockets:
+            for peer, conn in self.uploader.peer_sockets.items():
                 send_message.send_have_message(conn, piece_index)
         except Exception as e:
             logging.error(f"Error in _broadcast_have_message: {e}")
@@ -400,7 +400,7 @@ class Downloader:
 
         listener_list = []
         for peer in self.peerList:
-            conn = self.peerConnection[peer]
+            conn = self.peerConnection.get(peer)
             listener = Thread(target=self._downloader_flow, args=(peer, conn))
             listener_list.append(listener)
             listener.start()
@@ -412,8 +412,17 @@ class Downloader:
         for listener in listener_list:
             listener.join()
 
+    def _download(self):
+        while not self.is_having_all_pieces():
+            if self.peerList:
+                self.multi_download_manage()
+
         self.file_structure.merge_pieces(self.torrent_info)
-        self.task_done = True            
+
+    def update_peer_list(self, peer):
+        with self.lock:
+            if peer not in self.peerList:
+                self.peerList.append(peer)      
             
 if __name__ == "__main__":
     tester = Downloader(r'C:\Users\MyClone\OneDrive\Desktop\SharingFolder\hello.torrent', "127.119.128.1", [], None)

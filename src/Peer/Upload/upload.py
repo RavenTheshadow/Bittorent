@@ -207,7 +207,7 @@ class Upload:
             self.contribution_rank[peer] = 0
 
     def request_listen_port(self, conn):
-        if not self.downloader.task_done:
+        if not self.downloader.is_having_all_pieces():
             conn.sendall(struct.pack('>I', 1) + struct.pack('B', 13))
             response = conn.recv(9)
             length_prefix = struct.unpack('>I', response[:4])[0]
@@ -254,7 +254,8 @@ class Upload:
 
             while True:
                 try:
-                    self.request_listen_port(conn)
+                    port = self.request_listen_port(conn)
+                    self.downloader.update_peer_list(received_peer_ip, port)
                     break
                 except Exception as e:
                     continue    
