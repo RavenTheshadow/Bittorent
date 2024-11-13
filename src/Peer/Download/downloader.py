@@ -45,7 +45,7 @@ class Downloader:
             return None
 
     def get_rarest_pieces(self):
-        rarest_piece = None
+        rarest_pieces = []
         min_peers_count = float('inf')
 
         for piece_index, peers in self.having_pieces_list.items():
@@ -53,9 +53,13 @@ class Downloader:
                 peers_count = len(peers)
                 if peers_count < min_peers_count:
                     min_peers_count = peers_count
-                    rarest_piece = piece_index
+                    rarest_pieces = [piece_index]
+                elif peers_count == min_peers_count:
+                    rarest_pieces.append(piece_index)
 
-        return rarest_piece
+        if rarest_pieces:
+            return random.choice(rarest_pieces)
+        return None
     
     def update_pieces(self, index, piece, info_hash):
         self.bit_field[index] = 1

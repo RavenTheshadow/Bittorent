@@ -26,7 +26,7 @@ class P2PConnection:
     # Phần này lâm viết 
 
     def start_downloading(self):
-        self.downloader.multi_download_manage()
+        self.downloader._download()
 
     def listen_for_peers(self):
         """Continuously listens for incoming peer connections."""
