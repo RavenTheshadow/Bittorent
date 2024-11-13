@@ -239,17 +239,18 @@ class Downloader:
     def _connect_peer(self, peer):
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.settimeout(600)
+            s.settimeout(10)
             self.start_a_connection(peer, s)
             with self.lock:
                 if not s.getpeername():
+                    logging.error(f"Failed to start a connection to peer {peer} within 10 seconds")
                     return None
                 else:
                     self.peerConnection[peer] = s
                     if peer[0] not in self.uploader.contribution_rank:
                         self.uploader.contribution_rank[peer[0]] = 0
-        except Exception as e:
-            logging.error(f"Error in _connect_peer: {e}")
+        except (socket.timeout, socket.error) as e:
+            logging.error(f"Error connecting to peer {peer}: {e}")
             if peer in self.peerConnection:
                 del self.peerConnection[peer]
             return None
