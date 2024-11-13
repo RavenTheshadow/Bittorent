@@ -218,6 +218,7 @@ class Upload:
             if message_id != 9:
                 raise Exception(f"Expected message ID 9, received {message_id}")
             port = struct.unpack('>H', response[5:7])[0]
+            logging.info(f"Received listen port: {port}")
             return port
 
     def upload_flow(self, conn):
@@ -251,13 +252,19 @@ class Upload:
                 self.update_contribution_rank(received_peer_ip)
 
             # Kiểm tra xem nếu quá trình download đã kết thúc hay chưa nếu chưa yêu cầu kết nối tới sever upload?
-            while True:
+            retry_count = 5  # Number of retries
+            attempt = 0
+
+            while attempt < retry_count:
                 try:
                     port = self.request_listen_port(conn)
                     self.downloader.update_peer_list((received_peer_ip, port))
                     break
                 except Exception as e:
                     logging.error(f"Error requesting listen port: {e}")
+                    attempt += 1
+                    if attempt >= retry_count:
+                        raise Exception("Error requesting listen port")
                     continue    
 
             # 5. Xử lý yêu cầu từ peer
