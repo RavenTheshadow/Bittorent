@@ -137,7 +137,7 @@ class Downloader:
         try:
             send_message = SendMessageP2P()
             conn = self.peerConnection[peer]
-            send_message.send_server_information(conn, self.our_peer_id, self.listen_port)
+            send_message.send_server_information(conn, self.listen_port)
         except Exception as e:
             pass
 
