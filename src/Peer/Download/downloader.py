@@ -345,9 +345,13 @@ class Downloader:
             for i, block in enumerate(request_blocks):
                 index, start, end = block
                 peer_request_block = selected_peers[i % len(selected_peers)]
-                s = self.peerConnection[peer_request_block]
-                self._send_block_request(s, peer_request_block, index, start, end)
-                time.sleep(0.1)
+                with self.lock:
+                    s = self.peerConnection.get(peer_request_block)
+                if s:
+                    self._send_block_request(s, peer_request_block, index, start, end)
+                    time.sleep(0.1)
+                else:
+                    logging.error(f"No connection found for peer {peer_request_block}")
         except Exception as e:
             logging.error(f"Error in request_blocks_from_peers: {e}")
 
@@ -427,6 +431,7 @@ class Downloader:
         while not self.is_having_all_pieces():
             if self.peerList:
                 self.multi_download_manage()
+                time.sleep(10)
 
         self.file_structure.merge_pieces(self.torrent_info)
 
