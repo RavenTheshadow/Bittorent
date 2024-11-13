@@ -62,7 +62,7 @@ if __name__ == "__main__":
     our_Peer_ID = "10.0.239.28"
 
     peerList = []
-    peer = P2PConnection(r'C:\Users\MyClone\OneDrive\Desktop\SharingFolder\hello.torrent',
+    peer = P2PConnection(r'C:\Users\MyClone\OneDrive\Desktop\SharingFolder\simple.torrent',
                           our_Peer_ID, peerList, 2933)
     
     thread2 = Thread(target=peer.listen_for_peers, daemon=True)

@@ -251,13 +251,13 @@ class Upload:
                 self.update_contribution_rank(received_peer_ip)
 
             # Kiểm tra xem nếu quá trình download đã kết thúc hay chưa nếu chưa yêu cầu kết nối tới sever upload?
-
             while True:
                 try:
                     port = self.request_listen_port(conn)
                     self.downloader.update_peer_list((received_peer_ip, port))
                     break
                 except Exception as e:
+                    logging.error(f"Error requesting listen port: {e}")
                     continue    
 
             # 5. Xử lý yêu cầu từ peer

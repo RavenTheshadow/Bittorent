@@ -81,16 +81,12 @@ class Downloader:
             processor_thread.start()
 
         except (socket.timeout, socket.error) as e:
-            logging.error(f"")
             if peer in self.peerList:
                 self.peerList.remove(peer)
-            listen_thread.join()
-            processor_thread.join()
 
     def _listen_thread(self, s: socket.socket, peer, message_queue: queue.Queue):
         try:
             while True:
-                # TCP get max length of 1460 bytes
                 message = s.recv(1460)
                 if not message:
                     break
@@ -99,6 +95,10 @@ class Downloader:
             logging.error(f"Error receiving message from {peer} - {e}")
         finally: 
             logging.info(f"Disconnected from {peer}")
+            with self.lock:
+                if peer in self.peerConnection:
+                    del self.peerConnection[peer]
+            s.close()
 
     def _processor_thread(self, s: socket.socket, peer, message_queue: queue.Queue):
             try:
@@ -107,6 +107,11 @@ class Downloader:
                     self._handle_message(message, peer)
             except queue.Empty:
                 logging.error(f"Timeout waiting for message from {peer}")
+            finally:
+                with self.lock:
+                    if peer in self.peerConnection:
+                        del self.peerConnection[peer]
+                s.close()
 
     def _handle_message(self, message, peer):
         if len(message) < 1:
@@ -217,6 +222,7 @@ class Downloader:
 
             logging.info(f"Received bitfield from {peer[0]}:{peer[1]}")      
         except (socket.timeout, socket.error) as e:
+            logging.error(f"Error connecting to peer {peer}: {e}")
             if peer in self.peerList:
                 self.peerList.remove(peer)
                 self.unchoke.pop(peer, None)
@@ -271,6 +277,7 @@ class Downloader:
                     if peer[0] not in self.uploader.contribution_rank:
                         self.uploader.contribution_rank[peer[0]] = 0
         except Exception as e:
+            logging.error(f"Error in _connect_peer: {e}")
             if peer in self.peerConnection:
                 del self.peerConnection[peer]
             return None
