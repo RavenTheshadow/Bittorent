@@ -58,11 +58,13 @@ if __name__ == "__main__":
     # my_IP = get_my_IP()
     # print(my_IP)
 
-    our_Peer_ID = "10.229.197.210"
+    our_Peer_ID = "10.229.208.79"
 
-    peerList = [("10.229.197.223", 6000)]
-    peer = P2PConnection(r'C:\Users\MyClone\OneDrive\Desktop\SharingFolder\hello.torrent',
-                          our_Peer_ID, peerList)
-    
-    peer.start_downloading()
+    peerList = [("10.229.197.223",6000)]
+    peer = P2PConnection(r"/Users/khoanguyen/Workspace/Assignment_Computer_Networking/Bittorent/src/hello.torrent",
+                          our_Peer_ID, peerList,9090)
+    t1 = Thread(target=peer.start_downloading)
+    t1.start()
+    t2 = Thread(target=peer.listen_for_peers)
+    t2.start()
     print(f"{peer.downloader.number_of_bytes_downloaded} bytes downloaded")
