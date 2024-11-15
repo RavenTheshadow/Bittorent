@@ -51,6 +51,8 @@ class FileStructure:
             else:
                 (info_hash_folder / 'pieces').mkdir()
             self.save_bitfield(info_hash_folder / 'bitfield')
+        else:
+            self.bitfield = self.get_bitfield_info(info_hash_folder)
 
         return info_hash_folder
 
@@ -68,8 +70,21 @@ class FileStructure:
             mp = json.load(f)
         return mp[self.info_hash]
     
+    def has_all_pieces(self, torrent_info: TorrentInfo):
+        pieces_folder = Path(self.get_pieces_folder()).resolve()
+        for piece_index in range(torrent_info.get_number_of_pieces()):
+            piece_info_hash = torrent_info.get_piece_info_hash(piece_index).decode('utf-8')
+            piece_path = pieces_folder / piece_info_hash
+            if not piece_path.exists():
+                return False
+        return True
+
     def merge_pieces(self, torrent_info: TorrentInfo):
         try:
+            if not self.has_all_pieces(torrent_info):
+                print("Not all pieces are available yet.")
+                return
+
             pieces_folder = Path(self.get_pieces_folder()).resolve()
         
             file_save_dir = self.download_dir / Path(self.info_hash)
