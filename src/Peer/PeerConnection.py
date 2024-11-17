@@ -48,9 +48,10 @@ class P2PConnection:
             conn.close()
 
 if __name__ == "__main__":
-    our_Peer_ID = "10.0.239.28"
-    peerList = [("10.0.239.28", 2933)]
-    peer = P2PConnection(r'C:\Users\MyClone\OneDrive\Desktop\SharingFolder\simple.torrent', our_Peer_ID, peerList, 8000)
+    our_Peer_ID = "10.229.135.122"
+    peerList = []
+    peer = P2PConnection(r'C:\Users\User\Desktop\Năm 3\HK1\Computer Network\Asignment1\Bittorent/hello.torrent', 
+                         our_Peer_ID, peerList, 8000)
     
     thread2 = Thread(target=peer.listen_for_peers, daemon=True)
     thread2.start()

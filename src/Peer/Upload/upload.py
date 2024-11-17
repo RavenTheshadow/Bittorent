@@ -224,10 +224,12 @@ class Upload:
                     self.handle_interested(conn, received_peer_ip)
                 elif message_id == 6:
                     self.handle_request(conn, payload)
+
                 else:
                     logging.warning(f"Không hỗ trợ message_id: {message_id}")
         except (socket.error, struct.error) as e:
             logging.error(f"Lỗi trong upload flow: {e}")
+            self.upload_flow(conn)
         finally:
             with self.lock:
                 if 'received_peer_ip' in locals() and received_peer_ip in self.peer_sockets:
