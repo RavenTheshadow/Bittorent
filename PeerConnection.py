@@ -2,8 +2,8 @@ import socket
 import struct
 import logging
 from threading import Lock, Thread
-from Download.downloader import Downloader
-from Upload.upload import Upload
+from Downloader import Downloader
+from Upload import Upload
 
 logging.basicConfig(level=logging.INFO)
 
@@ -58,13 +58,15 @@ if __name__ == "__main__":
     # my_IP = get_my_IP()
     # print(my_IP)
 
-    our_Peer_ID = "10.229.208.79"
+    our_Peer_ID = "192.168.152.98"
 
-    peerList = [("10.229.197.223",6000)]
+    peerList = [("192.168.64.2",9090)]
     peer = P2PConnection(r"/Users/khoanguyen/Workspace/Assignment_Computer_Networking/Bittorent/src/hello.torrent",
                           our_Peer_ID, peerList,9090)
     t1 = Thread(target=peer.start_downloading)
     t1.start()
     t2 = Thread(target=peer.listen_for_peers)
     t2.start()
+    t1.join()
+    t2.join()
     print(f"{peer.downloader.number_of_bytes_downloaded} bytes downloaded")

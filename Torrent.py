@@ -1,7 +1,7 @@
 from pathlib import Path
 import bencodepy
 import hashlib
-
+import functools
 class TorrentInfo:
     def __init__(self, torrent_file_path):
         self.torrent_file_path = torrent_file_path
@@ -25,7 +25,7 @@ class TorrentInfo:
         # Calculate info_hash
         info_bencoded = bencodepy.encode(info)
         self.info_hash = hashlib.sha1(info_bencoded).hexdigest()
-
+        self.total_bytes = functools.reduce(lambda total , file: total + int(file['length']),self.files,0)
     def get_piece_sizes(self):
         piece_sizes = []
         for file in self.files:
@@ -52,7 +52,7 @@ class TorrentInfo:
 
 if __name__ == "__main__":
     # Example usage
-    torrent_info = TorrentInfo(r'C:\Users\User\Desktop\Năm 3\HK1\Computer Network\Asignment1\Bittorent\hello.torrent')
+    torrent_info = TorrentInfo('hello.torrent')
     print(f"Info Hash: {torrent_info.info_hash}")
     print(f"Piece Length: {torrent_info.piece_length}")
     print(f"Name: {torrent_info.name}")
@@ -63,3 +63,4 @@ if __name__ == "__main__":
     print(f"Get Piece info hash: {torrent_info.get_piece_info_hash(0)}")
     print(f"Number of pieces: {torrent_info.get_number_of_pieces()}")
     print(f"Get Piece Index: {torrent_info.get_piece_index(torrent_info.pieces[20:40])}")
+    print(f'Tototal bytes: {torrent_info.total_bytes}')

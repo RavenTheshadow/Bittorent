@@ -2,9 +2,9 @@ from collections import defaultdict
 from pathlib import Path
 import sys, socket, logging, struct, queue, time, random, hashlib
 sys.path.append(str(Path(__file__).resolve().parent.parent))
-from MOCKTorrent import TorrentInfo
-from FileStruct.fileStructure import FileStructure
-from Message.sendMessage import SendMessageP2P
+from Torrent import TorrentInfo
+from FileStructure import FileStructure
+from sendMessage import SendMessageP2P
 from threading import Lock, Thread, Barrier
 logging.basicConfig(level=logging.INFO)
 class Downloader:

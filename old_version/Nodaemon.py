@@ -5,8 +5,8 @@ import requests
 from pathlib import Path
 import sys
 sys.path.append(str(Path(__file__).resolve().parent.parent))
-from Cli.utils import *
-from Peer.PeerConnection import P2PConnection
+from utils import *
+from PeerConnection import P2PConnection
 import dotenv
 
 
@@ -25,8 +25,6 @@ class Nodaemon:
                     self.download(commands[1])
                 elif commands[0] == "STOP":
                     self.running = False
-                    for torrent, torrent_info in self.torrents:
-                        self.send_message_to_tracker(info_hash=torrent,event_type="stopped")
                 elif commands[0] == "UPLOAD":
                     self.upload(commands[1])
                 elif commands[0] == "LIST":

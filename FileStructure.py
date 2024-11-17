@@ -1,5 +1,5 @@
 import json
-from MOCKTorrent import TorrentInfo
+from Torrent import TorrentInfo
 from pathlib import Path
 
 class FileStructure:
