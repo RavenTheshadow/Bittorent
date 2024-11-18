@@ -117,16 +117,16 @@ class Downloader:
             self._handle_piece_message(payload)
         elif message_id == 11:
             self._handle_get_peers_list_message(payload)
-        elif message_id == 13:
-            self._handle_send_sever_information(peer)
+        # elif message_id == 13:
+        #     self._handle_send_sever_information(peer)
 
-    def _handle_send_sever_information(self, peer):
-        try:
-            send_message = SendMessageP2P()
-            conn = self.peerConnection[peer]
-            send_message.send_server_information(conn, self.listen_port)
-        except Exception as e:
-            logging.error(f"Error sending server information to {peer}: {e}")
+    # def _handle_send_sever_information(self, peer):
+    #     try:
+    #         send_message = SendMessageP2P()
+    #         conn = self.peerConnection[peer]
+    #         send_message.send_server_information(conn, self.listen_port)
+    #     except Exception as e:
+    #         logging.error(f"Error sending server information to {peer}: {e}")
 
     def _handle_choke_message(self, peer):
         with self.lock:
@@ -377,12 +377,23 @@ class Downloader:
         while not self.is_having_all_pieces():
             if self.peerList:
                 self.multi_download_manage()
+            time.sleep(1)
         self.file_structure.merge_pieces(self.torrent_info)
 
     def update_peer_list(self, peer):
         with self.lock:
             if peer not in self.peerList:
                 self.peerList.append(peer)
+                self._connect_peer(peer)
+                conn = self.peerConnection.get(peer)
+                if conn:
+                    listener = Thread(target= self._downloader_flow, args=(peer, conn))
+                    listener.start()
+                    self.listener_list.append(listener)
+
+    def update_peer_list_from_tracker(self, peer_list):
+        for peer in peer_list:
+            self.update_peer_list(peer)
 
 if __name__ == "__main__":
     tester = Downloader(r'C:\Users\MyClone\OneDrive\Desktop\SharingFolder\hello.torrent', "127.119.128.1", [], None)

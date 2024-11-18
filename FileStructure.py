@@ -87,14 +87,13 @@ class FileStructure:
 
             pieces_folder = Path(self.get_pieces_folder()).resolve()
         
-            file_save_dir = self.download_dir / Path(self.info_hash)
             files = torrent_info.files  # Metadata các file từ torrent
 
             piece_index = 0
 
             for file_info in files:
                 # Tạo đường dẫn file theo metadata
-                file_path = file_save_dir / Path(*file_info['path'])
+                file_path = Path(*file_info['path'])
                 # Tạo thư mục cha của file nếu chưa có
                 file_path.parent.mkdir(parents=True, exist_ok=True)
 

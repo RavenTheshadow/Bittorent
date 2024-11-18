@@ -162,19 +162,19 @@ class Upload:
         if peer not in self.contribution_rank:
             self.contribution_rank[peer] = 0
 
-    def request_listen_port(self, conn):
-        if not self.downloader.is_having_all_pieces():
-            conn.sendall(struct.pack('>I', 1) + struct.pack('B', 13))
-            response = conn.recv(9)
-            length_prefix = struct.unpack('>I', response[:4])[0]
-            if len(response[4:]) != length_prefix:
-                raise Exception("Invalid response length")
-            message_id = struct.unpack('B', response[4:5])[0]
-            if message_id != 9:
-                raise Exception(f"Expected message ID 9, received {message_id}")
-            port = struct.unpack('>H', response[5:7])[0]
-            logging.info(f"Received listen port: {port}")
-            return port
+    # def request_listen_port(self, conn):
+    #     if not self.downloader.is_having_all_pieces():
+    #         conn.sendall(struct.pack('>I', 1) + struct.pack('B', 13))
+    #         response = conn.recv(9)
+    #         length_prefix = struct.unpack('>I', response[:4])[0]
+    #         if len(response[4:]) != length_prefix:
+    #             raise Exception("Invalid response length")
+    #         message_id = struct.unpack('B', response[4:5])[0]
+    #         if message_id != 9:
+    #             raise Exception(f"Expected message ID 9, received {message_id}")
+    #         port = struct.unpack('>H', response[5:7])[0]
+    #         logging.info(f"Received listen port: {port}")
+    #         return port
 
     def upload_flow(self, conn):
         try:
@@ -194,19 +194,19 @@ class Upload:
             with self.lock:
                 self.peer_sockets[received_peer_ip] = conn
                 self.update_contribution_rank(received_peer_ip)
-            retry_count = 5
-            attempt = 0
-            while attempt < retry_count:
-                try:
-                    port = self.request_listen_port(conn)
-                    self.downloader.update_peer_list((received_peer_ip, port))
-                    break
-                except Exception as e:
-                    logging.error(f"Error requesting listen port: {e}")
-                    attempt += 1
-                    if attempt >= retry_count:
-                        raise Exception("Error requesting listen port")
-                    continue
+            # retry_count = 5
+            # attempt = 0
+            # while attempt < retry_count:
+            #     try:
+            #         port = self.request_listen_port(conn)
+            #         self.downloader.update_peer_list((received_peer_ip, port))
+            #         break
+            #     except Exception as e:
+            #         logging.error(f"Error requesting listen port: {e}")
+            #         attempt += 1
+            #         if attempt >= retry_count:
+            #             raise Exception("Error requesting listen port")
+            #         continue
             while True:
                 request_data = conn.recv(1024)
                 if not request_data:
@@ -222,9 +222,9 @@ class Upload:
                 elif message_id == 6:
                     self.handle_request(conn, payload)
                 else:
-                    logging.warning(f"Không hỗ trợ message_id: {message_id}")
+                    logging.warning(f"No supported message_id: {message_id}")
         except (socket.error, struct.error) as e:
-            logging.error(f"Lỗi trong upload flow: {e}")
+            logging.error(f"Error in upload flow: {e}")
         finally:
             with self.lock:
                 if 'received_peer_ip' in locals() and received_peer_ip in self.peer_sockets:
