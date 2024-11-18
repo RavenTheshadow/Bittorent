@@ -4,14 +4,14 @@ import os
 import dotenv
 from pathlib import Path
 from prompt_toolkit import PromptSession
-from old_version.Nodaemon import Nodaemon
 from Nodaemon import Nodaemon
+from FileStructure import FileStructure
+from Torrent import TorrentInfo
 from utils import *
 
 def createTorrentFile(args):
   directory = args.directory
   dotenv.load_dotenv()
-  directory = args.directory
   directory_path = Path(directory)
   if os.path.exists(directory):
     piece_length = int(os.getenv("PIECE_LENGTH"))
@@ -43,13 +43,19 @@ def createTorrentFile(args):
     with open(f"{torrent_file_name}.torrent","wb") as f:
       f.write(meta_info_hash)
     info_hash = hashlib.sha1(bencodepy.encode(meta_info["info"])).hexdigest()
-    if not os.path.exists(".torrent"):
-      os.mkdir(".torrent")
-    os.mkdir(f".torrent/{info_hash}")
-    os.mkdir(f".torrent/{info_hash}/pieces")
-    for piece in piece_byte_list:
-      with open(f".torrent/{info_hash}/pieces/{hash_piece(piece)}","wb") as f:
-        f.write(piece)
+    fileStructure = FileStructure(
+      pieces_length=int(os.getenv('PIECE_LENGTH')),
+      info_hash=info_hash,
+      torrent_info=TorrentInfo(torrent_file_path=f'{torrent_file_name}.torrent')
+    )
+    fileStructure.get_info_hash_folder()
+    # if not os.path.exists("DownloadFolder"):
+    #   os.mkdir("DownloadFolder")
+    # os.mkdir(f"DownloadFolder/{info_hash}")
+    # os.mkdir(f"DownloadFolder/{info_hash}/pieces")
+    # for piece in piece_byte_list:
+    #   with open(f"DownloadFolder/{info_hash}/pieces/{hash_piece(piece)}","wb") as f:
+    #     f.write(piece)
   else:
     print(f"create: No such a directory: {directory}")
     return

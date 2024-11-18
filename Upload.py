@@ -6,10 +6,7 @@ import threading
 import time
 import random
 import socket
-import sys
 from sendMessage import SendMessageP2P
-from pathlib import Path
-sys.path.append(str(Path(__file__).resolve().parent.parent))
 from Torrent import TorrentInfo
 import json
 
@@ -24,9 +21,8 @@ class Upload:
         self.lock = threading.Lock()
         self.msg_sender = SendMessageP2P()
         self.downloader = None
-        self.number_of_bytes_uploaded = 0
         self.start_global_periodic_tasks()
-
+        self.number_of_bytes_uploaded = 0
     def _set_downloader(self, downloader):
         self.downloader = downloader
 
@@ -88,7 +84,7 @@ class Upload:
             piece_message = piece_message_id + piece_index + piece_begin + block_data
             time.sleep(len(block_data) / 1e6)
             conn.sendall(block_length_prefix + piece_message)
-            self.number_of_bytes_uploaded+=length
+            self.number_of_bytes_uploaded += len(block_data)
             logging.info(f"Sent block {begin}-{begin + length} of piece {index} to peer.")
             logging.info(f"Message Size: {len(block_length_prefix + piece_message)}")
         except FileNotFoundError:
@@ -226,9 +222,9 @@ class Upload:
                 elif message_id == 6:
                     self.handle_request(conn, payload)
                 else:
-                    logging.warning(f"KhÃ´ng há»— trá»£ message_id: {message_id}")
+                    logging.warning(f"Không hỗ trợ message_id: {message_id}")
         except (socket.error, struct.error) as e:
-            logging.error(f"Lá»—i trong upload flow: {e}")
+            logging.error(f"Lỗi trong upload flow: {e}")
         finally:
             with self.lock:
                 if 'received_peer_ip' in locals() and received_peer_ip in self.peer_sockets:
