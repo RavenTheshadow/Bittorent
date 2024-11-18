@@ -72,9 +72,9 @@ class Torrent:
     while not self.torrent.isEnoughPiece:
       response = self._send_message_to_tracker('started')
       torrent_info = response.json() if response != None else None
-      print(torrent_info['peers'])
       if torrent_info:
-        self.torrent.downloader.peerList = torrent_info['peers']
+        peers_list = [(peer['ip_address'],peer['port']) for peer in torrent_info['peers']]
+        self.torrent.downloader.update_peer_list_from_tracker(peers_list)
       time.sleep(10)
   def get_port(self):
     return self.torrent.port
