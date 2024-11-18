@@ -41,6 +41,7 @@ class Torrent:
   def startSeeder(self):
     try:
       self._send_message_to_tracker('completed')
+      self.downloader.start()
       self.uploader.start()
     except:
       print("Error when seeder torrent")
@@ -51,7 +52,7 @@ class Torrent:
       'info_hash': self.get_info_hash(),
       'peer_id':get_host_ip(),
       'port':self.get_port(),
-      'upload':self.get_bytes_uploaded(),
+      'uploaded':self.get_bytes_uploaded(),
       'downloaded':self.get_bytes_downloaded(),
       'left':self.get_total_bytes() - self.get_bytes_downloaded(),
       'event':event_type
@@ -71,6 +72,7 @@ class Torrent:
     while not self.torrent.isEnoughPiece:
       response = self._send_message_to_tracker('started')
       torrent_info = response.json() if response != None else None
+      print(torrent_info['peers'])
       if torrent_info:
         self.torrent.downloader.peerList = torrent_info['peers']
       time.sleep(10)
