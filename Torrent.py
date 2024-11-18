@@ -48,7 +48,7 @@ class TorrentInfo:
         return len(self.pieces) // 40
     
     def get_piece_index(self, piece_info_hash):
-        return self.pieces.index(piece_info_hash) // 20
+        return self.pieces.index(piece_info_hash) // 40
 
 if __name__ == "__main__":
     # Example usage

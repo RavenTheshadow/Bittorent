@@ -75,7 +75,7 @@ class Torrent:
       if torrent_info:
         peers_list = [(peer['ip_address'],peer['port']) for peer in torrent_info['peers']]
         self.torrent.downloader.update_peer_list_from_tracker(peers_list)
-      time.sleep(10)
+      time.sleep(torrent_info['interval'])
   def get_port(self):
     return self.torrent.port
   def get_total_bytes(self):

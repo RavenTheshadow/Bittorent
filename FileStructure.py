@@ -46,7 +46,7 @@ class FileStructure:
             if (info_hash_folder / 'pieces').exists():
                 for piece in (info_hash_folder / 'pieces').iterdir():
                     piece_info_hash = piece.name.encode('utf-8')
-                    index = self.torrent_info.get_piece_index(piece_info_hash)
+                    index = self.torrent_info.get_piece_index(piece_info_hash)-1
                     self.bitfield[index] = 1
             else:
                 (info_hash_folder / 'pieces').mkdir()
