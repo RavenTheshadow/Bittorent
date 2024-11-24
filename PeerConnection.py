@@ -2,15 +2,15 @@ import socket
 import struct
 import logging
 from threading import Lock, Thread
-from Download.downloader import Downloader
-from Upload.upload import Upload
+from Downloader import Downloader
+from Upload import Upload
 
 logging.basicConfig(level=logging.INFO)
 
 class P2PConnection:
     def __init__(self, torrent_file_path, our_peer_id="192.168.56.1", peerList=[], port=9000):
         self.lock = Lock()
-        self.our_peer_id = our_peer_id
+        self.our_peer_id = our_peer_id 
         self.peerList = peerList
         self.torrent_file_path = torrent_file_path
         self.port = port
@@ -29,11 +29,9 @@ class P2PConnection:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
                 server_socket.bind(('', self.port))
                 server_socket.listen(5)
-                logging.info(f"Listening for incoming connections on port {self.port}")
 
                 while True:
                     conn, addr = server_socket.accept()
-                    logging.info(f"Accepted connection from {addr}")
                     Thread(target=self.handle_incoming_peer, args=(conn, addr)).start()
         except socket.error as e:
             logging.error(f"Error while listening for peers: {e}")
@@ -46,19 +44,3 @@ class P2PConnection:
             logging.error(f"Error handling peer {addr}: {e}")
         finally:
             conn.close()
-
-if __name__ == "__main__":
-    our_Peer_ID = "10.0.239.28"
-    peerList = [("10.0.239.28", 2933)]
-    peer = P2PConnection(r'C:\Users\MyClone\OneDrive\Desktop\SharingFolder\simple.torrent', our_Peer_ID, peerList, 8000)
-    
-    thread2 = Thread(target=peer.listen_for_peers, daemon=True)
-    thread2.start()
-
-    thread1 = Thread(target=peer.start_downloading, daemon=True)
-    thread1.start()
-
-    thread1.join()
-    thread2.join()
-
-    print(f"{peer.downloader.number_of_bytes_downloaded} bytes downloaded")

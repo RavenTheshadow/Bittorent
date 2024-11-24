@@ -1,5 +1,5 @@
 import json
-from MOCKTorrent import TorrentInfo
+from Torrent import TorrentInfo
 from pathlib import Path
 
 class FileStructure:
@@ -68,7 +68,7 @@ class FileStructure:
     def get_pieces_folder(self):
         with open(self.mapping_file_path, 'r') as f:
             mp = json.load(f)
-        return mp[self.info_hash]
+            return mp[self.info_hash]
     
     def has_all_pieces(self, torrent_info: TorrentInfo):
         pieces_folder = Path(self.get_pieces_folder()).resolve()
@@ -87,14 +87,13 @@ class FileStructure:
 
             pieces_folder = Path(self.get_pieces_folder()).resolve()
         
-            file_save_dir = self.download_dir / Path(self.info_hash)
             files = torrent_info.files  # Metadata các file từ torrent
 
             piece_index = 0
 
             for file_info in files:
                 # Tạo đường dẫn file theo metadata
-                file_path = file_save_dir / Path(*file_info['path'])
+                file_path = Path(*file_info['path'])
                 # Tạo thư mục cha của file nếu chưa có
                 file_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -111,8 +110,7 @@ class FileStructure:
                             f.write(piece_data)
                             remaining_length -= len(piece_data)
                         piece_index += 1
-                    
-                print(f'{file_path} saved')
+                
         except Exception as e:
             pass
 
