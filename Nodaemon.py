@@ -149,7 +149,7 @@ class Nodaemon:
   def handleDownloadEvent(self):
     torrent_file = self.args.torrent_file
     port = self.args.port
-    if not os.path.exists(path=torrent_file):
+    if not os.path.exists(torrent_file):
       print(f'download: No such a file: {torrent_file}')
       return
     elif not self.isAvailablePort(port=int(port)):

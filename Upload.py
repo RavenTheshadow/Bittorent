@@ -14,6 +14,7 @@ class Upload:
     def __init__(self, torrent_file_path, mapping_file_path, peer_id):
         self.torrent_info = TorrentInfo(torrent_file_path)
         self.piece_folder = self._get_piece_folder(mapping_file_path)
+        self.mapping = mapping_file_path
         self.peer_id = peer_id
         self.contribution_rank = {}
         self.unchoke_list = []
@@ -31,7 +32,7 @@ class Upload:
             with open(mapping_file_path, 'r') as f:
                 mapping = json.load(f)
             info_hash = self.torrent_info.info_hash
-            piece_folder = mapping.get(info_hash)
+            piece_folder = mapping[info_hash]
             if piece_folder:
                 return piece_folder
             else:
@@ -43,15 +44,16 @@ class Upload:
 
     def send_bitfield(self, conn):
         try:
+            self.piece_folder = self._get_piece_folder(self.mapping)
+            print(f"piece_folder: {self.piece_folder}")
             parent_folder = os.path.dirname(self.piece_folder)
             bitfield_path = os.path.join(parent_folder, 'bitfield')
             with open(bitfield_path, 'rb') as f:
                 bitfield = f.read()
-            bitfield_length = struct.pack('>I', len(bitfield) + 1)
-            bitfield_message_id = struct.pack('B', 5)
-            bitfield_message = bitfield_length + bitfield_message_id + bitfield
-            conn.sendall(bitfield_message)
-            logging.info(f"Sent bitfield to peer {conn.getpeername()}")
+                bitfield_length = struct.pack('>I', len(bitfield) + 1)
+                bitfield_message_id = struct.pack('B', 5)
+                bitfield_message = bitfield_length + bitfield_message_id + bitfield
+                conn.sendall(bitfield_message)
         except (FileNotFoundError, IOError) as e:
             logging.error(f"Error reading bitfield from disk: {e}")
         except socket.error as e:
@@ -60,7 +62,8 @@ class Upload:
     def check_info_hash(self, received_info_hash):
         check = self.torrent_info.info_hash
         if received_info_hash == check:
-            logging.info("Info hash matches.")
+            # logging.info("Info hash matches.")
+            pass
         else:
             logging.error(f"Info hash mismatch: expected {check}, received {received_info_hash}")
         return received_info_hash == check
@@ -76,7 +79,7 @@ class Upload:
             with open(piece_path, 'rb') as f:
                 f.seek(begin)
                 block_data = f.read(length)
-            logging.info(f"Block hash info: {hashlib.sha1(block_data).hexdigest()}")
+            # logging.info(f"Block hash info: {hashlib.sha1(block_data).hexdigest()}")
             block_length_prefix = struct.pack('>I', len(block_data) + 9)
             piece_message_id = struct.pack('B', 7)
             piece_index = struct.pack('>I', index)
@@ -85,8 +88,8 @@ class Upload:
             time.sleep(len(block_data) / 1e6)
             conn.sendall(block_length_prefix + piece_message)
             self.number_of_bytes_uploaded += len(block_data)
-            logging.info(f"Sent block {begin}-{begin + length} of piece {index} to peer.")
-            logging.info(f"Message Size: {len(block_length_prefix + piece_message)}")
+            # logging.info(f"Sent block {begin}-{begin + length} of piece {index} to peer.")
+            # logging.info(f"Message Size: {len(block_length_prefix + piece_message)}")
         except FileNotFoundError:
             logging.error(f"Piece {index} not found in {self.piece_folder}.")
         except IOError as e:
@@ -112,7 +115,7 @@ class Upload:
             length_prefix = struct.pack('>I', 1)
             unchoke_message = struct.pack('B', 1)
             conn.sendall(length_prefix + unchoke_message)
-            logging.info(f"Sent unchoke message to {conn.getpeername()}")
+            # logging.info(f"Sent unchoke message to {conn.getpeername()}")
         except socket.error as e:
             logging.error(f"Error sending unchoke message: {e}")
 
@@ -121,7 +124,7 @@ class Upload:
             length_prefix = struct.pack('>I', 1)
             choke_message = struct.pack('B', 0)
             conn.sendall(length_prefix + choke_message)
-            logging.info(f"Sent choke message to {conn.getpeername()}")
+            # logging.info(f"Sent choke message to {conn.getpeername()}")
         except socket.error as e:
             logging.error(f"Error sending choke message: {e}")
 
@@ -133,7 +136,7 @@ class Upload:
                 self.unchoke_list = [peer for peer, _ in sorted_peers[:5]]
             for peer in self.unchoke_list:
                 self.send_unchoke_message(peer)
-            logging.info(f"Updated unchoke list: {self.unchoke_list}")
+            # logging.info(f"Updated unchoke list: {self.unchoke_list}")
 
     def random_unchoke_peer(self):
         while True:
@@ -146,7 +149,7 @@ class Upload:
                     with self.lock:
                         self.unchoke_list.append(random_peer)
                     self.send_unchoke_message(random_peer)
-                    logging.info(f"Randomly unchoked peer: {random_peer}")
+                    # logging.info(f"Randomly unchoked peer: {random_peer}")
 
     def send_unchoke_message(self, peer):
         conn = self.peer_sockets.get(peer)
@@ -210,7 +213,6 @@ class Upload:
             while True:
                 request_data = conn.recv(1024)
                 if not request_data:
-                    logging.info("Peer disconnected.")
                     break
                 length_prefix = struct.unpack('>I', request_data[:4])[0]
                 message_id = struct.unpack('B', request_data[4:5])[0]
@@ -222,7 +224,8 @@ class Upload:
                 elif message_id == 6:
                     self.handle_request(conn, payload)
                 else:
-                    logging.warning(f"No supported message_id: {message_id}")
+                    pass
+                    # logging.info(f"Received message ID {message_id} from peer {received_peer_ip}")
         except (socket.error, struct.error) as e:
             logging.error(f"Error in upload flow: {e}")
         finally:

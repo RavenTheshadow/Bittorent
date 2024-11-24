@@ -29,11 +29,9 @@ class P2PConnection:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
                 server_socket.bind(('', self.port))
                 server_socket.listen(5)
-                logging.info(f"Listening for incoming connections on port {self.port}")
 
                 while True:
                     conn, addr = server_socket.accept()
-                    logging.info(f"Accepted connection from {addr}")
                     Thread(target=self.handle_incoming_peer, args=(conn, addr)).start()
         except socket.error as e:
             logging.error(f"Error while listening for peers: {e}")
@@ -46,19 +44,3 @@ class P2PConnection:
             logging.error(f"Error handling peer {addr}: {e}")
         finally:
             conn.close()
-
-if __name__ == "__main__":
-    our_Peer_ID = "10.229.133.237"
-    peerList = [("10.229.135.122", 8000),('10.229.134.146',8000)]
-    peer = P2PConnection(r'/Users/khoanguyen/Workspace/Assignment_Computer_Networking/Bittorent/simple.torrent', our_Peer_ID, peerList, 8000)
-    
-    thread2 = Thread(target=peer.listen_for_peers, daemon=True)
-    thread2.start()
-
-    thread1 = Thread(target=peer.start_downloading, daemon=True)
-    thread1.start()
-
-    thread1.join()
-    thread2.join()
-
-    print(f"{peer.downloader.number_of_bytes_downloaded} bytes downloaded")

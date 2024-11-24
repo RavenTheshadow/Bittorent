@@ -68,7 +68,7 @@ class FileStructure:
     def get_pieces_folder(self):
         with open(self.mapping_file_path, 'r') as f:
             mp = json.load(f)
-        return mp[self.info_hash]
+            return mp[self.info_hash]
     
     def has_all_pieces(self, torrent_info: TorrentInfo):
         pieces_folder = Path(self.get_pieces_folder()).resolve()
@@ -110,8 +110,7 @@ class FileStructure:
                             f.write(piece_data)
                             remaining_length -= len(piece_data)
                         piece_index += 1
-                    
-                print(f'{file_path} saved')
+                
         except Exception as e:
             pass
 
