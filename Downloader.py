@@ -30,7 +30,7 @@ class Downloader:
         self.dataQueue = queue.Queue()
         self.listener_list = []
         self.received_blocks = defaultdict(set)
-        self.progress = tqdm.tqdm(unit='B', unit_scale=True, unit_divisor=1024, total=self.torrent_info.total_bytes)
+        self.progress = None
     def start_a_connection(self, peer, s: socket.socket):
         try:
             peer_ip, peer_port = peer
@@ -38,7 +38,7 @@ class Downloader:
             self._perform_handshake(s, peer)
             self._receive_bitfield(s, peer)
         except (socket.timeout, socket.error) as e:
-            logging.error(f"Error connecting to peer {peer}: {e}")
+            # logging.error(f"Error connecting to peer {peer}: {e}")
             self._remove_peer(peer)
 
     def _perform_handshake(self, s, peer):
@@ -90,7 +90,7 @@ class Downloader:
             self._validate_connection(s, peer)
             return s
         except (socket.timeout, socket.error) as e:
-            logging.error(f"Error connecting to peer {peer}: {e}")
+            # logging.error(f"Error connecting to peer {peer}: {e}")
             self._remove_peer(peer)
             return None
 
@@ -223,6 +223,7 @@ class Downloader:
         if index >= len(piece_sizes):
             logging.error(f"Invalid piece index: {index}")
             return
+        self.number_of_bytes_downloaded+=len(block_data)
         self.progress.update(len(block_data))
         with self.lock:
             self.dataQueue.put((index, begin, block_data))
@@ -349,9 +350,11 @@ class Downloader:
             # logging.info(f"All blocks received for piece {piece_index}")
             pass
         self.received_blocks[piece_index].clear()
-
+    def downloadThread(self):
+        self.progress = tqdm.tqdm(unit='B', unit_scale=True, unit_divisor=1024, total=self.torrent_info.total_bytes, initial=self.number_of_bytes_downloaded)
     def _download(self):
         while not self.is_having_all_pieces():
+            Thread(target=self.downloadThread,daemon=True).start()
             if self.peerList:
                 try:
                     self.download_rarest_piece()
@@ -360,7 +363,10 @@ class Downloader:
             else:
                 time.sleep(5)
         self.file_structure.merge_pieces(self.torrent_info)
-        self.progress.close()
+        if self.progress:
+            self.progress.close()
+            self.progress.clear()
+            print(f"Finish downloading !!")
     def update_peer_list(self, peer):
         with self.lock:
             if peer not in self.peerList:

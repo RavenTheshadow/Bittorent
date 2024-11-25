@@ -49,6 +49,7 @@ def createTorrentFile(args):
       torrent_info=TorrentInfo(torrent_file_path=f'{torrent_file_name}.torrent')
     )
     fileStructure.get_info_hash_folder()
+    print(f"Create file {torrent_file_name}.torrent sucessfully !")
     # if not os.path.exists("DownloadFolder"):
     #   os.mkdir("DownloadFolder")
     # os.mkdir(f"DownloadFolder/{info_hash}")

@@ -86,6 +86,8 @@ class Torrent:
     return self.torrent.uploader.number_of_bytes_uploaded
   def get_info_hash(self):
     return self.torrent.downloader.torrent_info.info_hash
+  def get_torrent_name(self):
+    return self.torrent.downloader.torrent_info.name
 
 class Nodaemon:
   def __init__(self,lock_event : threading.Event):
@@ -169,8 +171,12 @@ class Nodaemon:
     torrent_file = self.args.file
     info_hash = self.args.info
     if not torrent_file and not info_hash:
+      print("Info hash\t\t\t\t\tUpload\t\tDownload\tTorrent Name")
       for torrent in self.torrentList:
-        print(torrent)
+        downloadRate = torrent[1].get_bytes_downloaded()
+        uploadRate = torrent[1].get_bytes_uploaded()
+        torrentName = torrent[1].get_torrent_name()
+        print(f"{torrent[0]}\t{uploadRate}\t\t{downloadRate}\t\t{torrentName}")
     elif torrent_file:
       if os.path.exists(path=torrent_file):
         torrent_info = TorrentInfo(torrent_file_path=torrent_file)
@@ -179,15 +185,21 @@ class Nodaemon:
         print(f'show: No such a file: {torrent_file}')
         return
     elif info_hash:
-      if info_hash in self.torrentList:
-        print(self.torrentList[info_hash])
-      else:
-        print(f'show: No such a torrent: {info_hash}')
-        return
+        self._show_peers_list(info_hash)
     else:
       return
+  def _show_peers_list(self,info_hash):
+    infoHashList = [torrent[0] for torrent in self.torrentList]
+    if info_hash in infoHashList:
+      index = infoHashList.index(info_hash)
+      peerList = self.torrentList[index][1].torrent.peerList
+      for peer in peerList:
+        print(f"Peer IP: {peer[0]} - Peer port: {peer[1]}")
+    else:
+      print(f"show: No such a torrent: {info_hash}")
+      return
   def _print_torrent_info(self,torrent_info : TorrentInfo):
-    print(f'\nINFO HASH: {torrent_info.info_hash}')
+    print(f'INFO HASH: {torrent_info.info_hash}')
     print(f'DIRECTORY NAME: {torrent_info.name}')
     print(f'TRAKCER URL: {torrent_info.announce}')
     print('LIST OF FILE:')
