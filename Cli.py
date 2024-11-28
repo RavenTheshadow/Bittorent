@@ -44,11 +44,20 @@ def createTorrentFile(args):
       f.write(meta_info_hash)
     info_hash = hashlib.sha1(bencodepy.encode(meta_info["info"])).hexdigest()
     fileStructure = FileStructure(
-      pieces_length=int(os.getenv('PIECE_LENGTH')),
+      pieces_length=int(len(pieces)//40),
       info_hash=info_hash,
       torrent_info=TorrentInfo(torrent_file_path=f'{torrent_file_name}.torrent')
     )
+    if not os.path.exists("DownloadFolder"):
+      os.mkdir("DownloadFolder")
+    os.mkdir(f"DownloadFolder/{info_hash}")
+    os.mkdir(f"DownloadFolder/{info_hash}/pieces")
+    for piece in piece_byte_list:
+      with open(f"DownloadFolder/{info_hash}/pieces/{hash_piece(piece)}","wb") as f:
+        f.write(piece)
+    fileStructure.update_mapping_file()
     fileStructure.get_info_hash_folder()
+    print(f"Create file {torrent_file_name}.torrent sucessfully !")
     # if not os.path.exists("DownloadFolder"):
     #   os.mkdir("DownloadFolder")
     # os.mkdir(f"DownloadFolder/{info_hash}")
