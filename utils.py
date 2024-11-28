@@ -118,6 +118,8 @@ def get_host_ip():
     sock.close()
   return ip
 
-
+def readBitFiled(info_hash):
+    with open(f'DownloadFolder/{info_hash}/bitfield','rb') as f:
+        print(f.read())
 if __name__ == "__main__":
-    print(read_torrent_file("hello.torrent"))
+  readBitFiled(get_info_hash('hello.torrent'))

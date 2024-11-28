@@ -330,6 +330,53 @@ class Downloader:
             raise ConnectionError("No data received for piece")
         if torrent_info_hash == current_info_hash:
             self.update_pieces(rarest_piece, piece_data, current_info_hash)
+            logging.info(f"Get piece: {rarest_piece} hashValue: {torrent_info_hash}")
+            self._broadcast_have_message(rarest_piece)
+        else:
+            logging.error(f"Hash mismatch for piece {rarest_piece}. Re-requesting missing blocks.")
+            self._re_request_missing_blocks(rarest_piece)
+        self.pieces_data.clear()
+
+    def _re_request_missing_blocks(self, piece_index):
+        piece_size = self.torrent_info.get_piece_sizes()[piece_index]
+        block_size = 1024
+        expected_blocks = {(offset, offset + min(block_size, piece_size - offset)) for offset in range(0, piece_size, block_size)}
+        missing_blocks = expected_blocks - self.received_blocks[piece_index]
+        if missing_blocks:
+            logging.info(f"Re-requesting {len(missing_blocks)} missing blocks for piece {piece_index}")
+            selected_peers = random.sample(self.having_pieces_list[piece_index], min(5, len(self.having_pieces_list[piece_index])))
+            self.request_blocks_from_peers(list(missing_blocks), selected_peers)
+        else:
+            logging.info(f"All blocks received for piece {piece_index}")
+        self.received_blocks[piece_index].clear()
+
+        request_blocks = self.download_piece(rarest_piece)
+        selected_peers = random.sample(self.having_pieces_list[rarest_piece], min(5, len(self.having_pieces_list[rarest_piece])))
+
+        for _ in range(MAX_RETRIES):
+            try:
+                self.request_blocks_from_peers(request_blocks, selected_peers)
+                self.process_downloaded_blocks(request_blocks, selected_peers)
+                self._verify_and_update_piece(rarest_piece)
+                return
+            except ConnectionError as e:
+                logging.error(f"Connection error while processing piece {rarest_piece}: {e}")
+    
+    def sort_pieces_data(self):
+        with self.lock:
+            self.pieces_data = OrderedDict(sorted(self.pieces_data.items()))
+
+    def _verify_and_update_piece(self, rarest_piece):
+        torrent_info_hash = self.torrent_info.get_piece_info_hash(rarest_piece).decode('utf-8')
+        if self.pieces_data:
+            # Sort the pieces data by offset
+            self.sort_pieces_data()
+            piece_data = b''.join(self.pieces_data.values())
+            current_info_hash = hashlib.sha1(piece_data).hexdigest()
+        else:
+            raise ConnectionError("No data received for piece")
+        if torrent_info_hash == current_info_hash:
+            self.update_pieces(rarest_piece, piece_data, current_info_hash)
             # logging.info(f"Get piece: {rarest_piece} hashValue: {torrent_info_hash}")
             self._broadcast_have_message(rarest_piece)
         else:
