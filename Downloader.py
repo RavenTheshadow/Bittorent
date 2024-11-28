@@ -30,7 +30,7 @@ class Downloader:
         self.dataQueue = queue.Queue()
         self.listener_list = []
         self.received_blocks = defaultdict(set)
-        self.progress = None
+        self.progress = tqdm.tqdm(unit='B', unit_scale=True, unit_divisor=1024, total=self.torrent_info.total_bytes, initial=self.number_of_bytes_downloaded)
     def start_a_connection(self, peer, s: socket.socket):
         try:
             peer_ip, peer_port = peer
@@ -351,10 +351,10 @@ class Downloader:
             pass
         self.received_blocks[piece_index].clear()
     def downloadThread(self):
-        self.progress = tqdm.tqdm(unit='B', unit_scale=True, unit_divisor=1024, total=self.torrent_info.total_bytes, initial=self.number_of_bytes_downloaded)
+        pass
     def _download(self):
         while not self.is_having_all_pieces():
-            Thread(target=self.downloadThread,daemon=True).start()
+            # Thread(target=self.downloadThread,daemon=True).start()
             if self.peerList:
                 try:
                     self.download_rarest_piece()
@@ -363,10 +363,10 @@ class Downloader:
             else:
                 time.sleep(5)
         self.file_structure.merge_pieces(self.torrent_info)
-        if self.progress:
-            self.progress.close()
-            self.progress.clear()
-            print(f"Finish downloading !!")
+        # if self.progress:
+        #     self.progress.close()
+        #     self.progress.clear()
+        #     print(f"Finish downloading !!")
     def update_peer_list(self, peer):
         with self.lock:
             if peer not in self.peerList:
