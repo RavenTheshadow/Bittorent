@@ -14,6 +14,7 @@ class Upload:
     def __init__(self, torrent_file_path, mapping_file_path, peer_id):
         self.torrent_info = TorrentInfo(torrent_file_path)
         self.piece_folder = self._get_piece_folder(mapping_file_path)
+        self.mapping = mapping_file_path
         self.peer_id = peer_id
         self.contribution_rank = {}
         self.unchoke_list = []
@@ -31,7 +32,7 @@ class Upload:
             with open(mapping_file_path, 'r') as f:
                 mapping = json.load(f)
             info_hash = self.torrent_info.info_hash
-            piece_folder = mapping.get(info_hash)
+            piece_folder = mapping[info_hash]
             if piece_folder:
                 return piece_folder
             else:
@@ -43,15 +44,17 @@ class Upload:
 
     def send_bitfield(self, conn):
         try:
+            self.piece_folder = self._get_piece_folder(self.mapping)
+            print(f"piece_folder: {self.piece_folder}")
             parent_folder = os.path.dirname(self.piece_folder)
             bitfield_path = os.path.join(parent_folder, 'bitfield')
             with open(bitfield_path, 'rb') as f:
                 bitfield = f.read()
-            bitfield_length = struct.pack('>I', len(bitfield) + 1)
-            bitfield_message_id = struct.pack('B', 5)
-            bitfield_message = bitfield_length + bitfield_message_id + bitfield
-            conn.sendall(bitfield_message)
-            logging.info(f"Sent bitfield to peer {conn.getpeername()}")
+                bitfield_length = struct.pack('>I', len(bitfield) + 1)
+                bitfield_message_id = struct.pack('B', 5)
+                bitfield_message = bitfield_length + bitfield_message_id + bitfield
+                conn.sendall(bitfield_message)
+                logging.info(f"Sent bitfield to peer {conn.getpeername()}")
         except (FileNotFoundError, IOError) as e:
             logging.error(f"Error reading bitfield from disk: {e}")
         except socket.error as e:

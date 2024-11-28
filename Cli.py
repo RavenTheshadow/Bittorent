@@ -33,7 +33,7 @@ def createTorrentFile(args):
       "info": {
         "piece_length": piece_length,
         "pieces":pieces,
-        "name":directory,
+        "name":dirbitectory,
         "files": files
       },
       "announce": os.getenv("TRACKER")
